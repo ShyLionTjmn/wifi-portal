@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<HTML manifest="cache.manifest">
+<HEAD>
+<meta http-equiv="Cache-control" content="no-cache">
+<META charset="UTF-8">
+<TITLE>WiFi Portal Admin</TITLE>
+<LINK rel="icon" href="/favicon.ico">
+<LINK href="lib/jquery-ui/jquery-ui.min.css" rel="stylesheet">
+<LINK href="lib/jq-plugins/jquery-ui-iconfont/jquery-ui.icon-font.min.css" rel="stylesheet">
+<LINK href="lib/datatables/datatables.min.css" rel="stylesheet">
+<LINK href="styles.css" rel="stylesheet">
+<SCRIPT type="text/javascript" src="lib/jquery.js"></SCRIPT>
+<SCRIPT type="text/javascript" src="lib/jquery-ui/jquery-ui.min.js"></SCRIPT>
+<SCRIPT type="text/javascript" src="lib/datatables/datatables.min.js"></SCRIPT>
+<SCRIPT type="text/javascript">
+  var getUrlParameter = function getUrlParameter(sParam) {
+    var sPageURL = window.location.search.substring(1),
+        sURLVariables = sPageURL.split('&'),
+        sParameterName,
+        i;
+
+    for (i = 0; i < sURLVariables.length; i++) {
+        sParameterName = sURLVariables[i].split('=');
+
+        if (sParameterName[0] === sParam) {
+            return sParameterName[1] === undefined ? true : decodeURIComponent(sParameterName[1]);
+        }
+    }
+    return false;
+  };
+  var AJAX="ajax";
+  var version="production";
+  var DEBUG=getUrlParameter("debug") !== false;
+</SCRIPT>
+<SCRIPT type="text/javascript" src="mylib/js/myjslib.js"></SCRIPT>
+<SCRIPT type="text/javascript" src="consts.js"></SCRIPT>
+<SCRIPT type="text/javascript" src="wifi_portal.js"></SCRIPT>
+</HEAD>
+<BODY>
+  Loading
+</BODY>
+</HTML>

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<HTML>
+<HEAD>
+  <TITLE>%welcome%</TITLE>
+  <meta http-equiv="Cache-control" content="no-cache">
+  <META charset="UTF-8">
+  <LINK rel="icon" href="data:;base64,iVBORw0KGgo=">
+
+  <!-- contents of styles.css -->
+  <STYLE>
+%F_styles.css%
+  </STYLE>
+
+  <!-- contents of scripts.js -->
+  <SCRIPT type="text/javascript">
+%F_scripts.js%
+  </SCRIPT>
+
+  <SCRIPT type="text/javascript">
+function phone_check() {
+  let val = document.getElementById("phone").value;
+  if(!/^\+7\s*9(?:\s*\d){9}\s*$/.test(val)) {
+    document.getElementById("phone_error").style.display = "inline-block";
+  } else {
+    document.getElementById("phone_error").style.display = "none";
+    document.getElementById("phone_form").submit();
+  };
+};
+function code_check() {
+  let val = document.getElementById("code").value;
+  if(/^\S+$/.test(val)) {
+    document.getElementById("code_form").submit();
+  };
+};
+  </SCRIPT>
+
+  <!-- session info in form of const sess_info={...}; -->
+  <SCRIPT type="text/javascript">
+%S_%
+  </SCRIPT>
+</HEAD>
+<BODY>
+  <H2>%welcome%</H2>
+  <DIV class="random_head %C_random%" onclick="toggle('random_body');">%random_head%</DIV>
+  <DIV id="random_body" class="random_body">%random_body%</DIV>
+  <DIV>%sms_authentication%</DIV>
+  <DIV class="phone_div %C_show_phone_div%">
+    <DIV class="phone_message %C_message_class%">%C_message%</DIV>
+    <DIV id="phone_error" style="display: none;">%bad_phone%</DIV>
+    <FORM id="phone_form" method="post" action="?">
+      <LABEL>%enter_phone%: </LABEL><INPUT type="text" placeholder="%phone_placeholder%" name="phone" id="phone" value=""/>
+      <INPUT type="button" name="Ok" value="Ok" onclick="phone_check();"/>
+      <INPUT type="hidden" name="auth_method" value="sms"/>
+    </FORM>
+  </DIV>
+  <DIV class="code_div %C_show_code_div%">
+    <DIV class="code_message %C_message_class%">%C_message%</DIV>
+    <FORM id="code_form" method="post" action="?">
+      <LABEL>%enter_code%: </LABEL><INPUT type="text" name="code" id="code" value="%C_debug_code%"/>
+      <INPUT type="button" name="Ok" value="Ok" onclick="code_check();"/>
+      <INPUT type="hidden" name="auth_method" value="sms"/>
+    </FORM>
+  </DIV>
+  <DIV class="auth_reset_div">
+    <FORM method="post" action="?">
+      <INPUT type="submit" name="auth_reset" value="%auth_reset%"/>
+      <INPUT type="hidden" name="auth_method" value="reset"/>
+    </FORM>
+  </DIV>
+</BODY>
+</HTML>

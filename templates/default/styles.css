@@ -1,0 +1,27 @@
+body {
+  font-size: x-large;
+}
+.hidden {
+  display: none !important;
+}
+.random_body {
+  display: none;
+}
+.random_head {
+  color: red;
+  padding: 1em;
+  border: 1px solid black;
+  display: inline-block;
+}
+.shown_error {
+  color: red;
+}
+.shown_warn {
+  color: darkblue;
+}
+.auth_reset_div {
+  margin-top: 1.5em;
+}
+.mac_row {
+  border: 1px solid #888888;
+}

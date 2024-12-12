@@ -1,0 +1,67 @@
+{
+  "Clients": {
+    "wlc-h6805-11": {
+      "Ip": "10.96.39.11",
+      "Secret": "secret",
+      "Coa_port": "3799",
+      "Coa_secret": "secret",
+      "Type": "huawei"
+    },
+    "wlc-h6805-12": {
+      "Ip": "10.96.39.12",
+      "Secret": "secret",
+      "Coa_port": "3799",
+      "Coa_secret": "secret",
+      "Type": "huawei"
+    }
+  },
+  "Min_dev_swap_period": 1814400,
+  "Reauth_period": 604800,
+
+  "Redir_uri": "https://netapp.domain.com/wifi-portal/session/",
+  "Proxy_host": "10.0.19.12",
+
+  "Ldap_sync_period": 300,
+  "Ldap_users_query": "(&(userAccountControl:1.2.840.113556.1.4.803:=512)(!(userAccountControl:1.2.840.113556.1.4.803:=2))(|(memberOf=CN=usr_wifi_access_full,OU=WiFi,OU=IS access,OU=Groups,DC=domain,DC=example)(memberof=CN=usr_wifi_access_guest,OU=WiFi,OU=IS access,OU=Groups,DC=domain,DC=example)(memberof=CN=usr_wifi_access_default,OU=WiFi,OU=IS access,OU=Groups,DC=domain,DC=example)(memberof=CN=usr_ou-personnel,OU=Security,OU=Groups,DC=domain,DC=example)))",
+  "_Ldap_groups_reg": "(?i:^cn=usr_wifi_access_[^,]+,)",
+  "Ldap_groups_reg": "(?i:^cn=usr_wifi_access_[^,]+,|^cn=usr_ou-personnel,)",
+  "Ldap_page_size": 1000,
+  "Ldap_search_base": "DC=domain,DC=example",
+  "Ldap_uri": "ldap://ldap.domain.dom:389",
+  "Ldap_user": "ldap_reader@domain.dom",
+  "Ldap_password": "ldap_reader_password",
+  "Ldap_timeout": 10,
+  "Ldap_domain": "domain.example",
+  "Sms_queue_dir": "/var/spool/sms_queue",
+  "Sms_code_length": 5,
+  "Sms_code_dict": "0123456789",
+  "Default_level_login": "guest",
+  "Default_level_voucher": "guest",
+  "Default_level_sms": "guest",
+  "Default_level_2fa": "guest",
+  "Default_level_dpsk": "guest",
+  "Redir_acl": "3000",
+  "Portal_filter_acl": "3001",
+
+  "Radius_dictionary": "/etc/wifi_portal/huawei.dictionary",
+  "Secure_clid_reg": ".+:Corp_secure$",
+  "Secure_ssid": "Corp_secure",
+  "Levels": {
+    "full": {
+      "Name": "Full",
+      "Filter_acl": "3011",
+      "Secure_filter_acl": ""
+    },
+    "guest": {
+      "Name": "Guest",
+      "Filter_acl": "3010",
+      "Secure_filter_acl": "3010"
+    }
+  },
+  "Fac_server": "10.0.18.59:1813",
+  "Fac_secret": "zzzzzzzz",
+  "Mail_host": "10.0.18.21",
+  "Mail_from": "wifi-portal@domain.com",
+  "Support_contact": "call me here",
+  "_end": ""
+}

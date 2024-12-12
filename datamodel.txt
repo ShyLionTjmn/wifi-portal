@@ -1,0 +1,85 @@
+sessions[sess_id]
+                              from request, when added in radius_server.go, upon radius.AccountingRequest
+  sess_id         string
+  sta_id          string
+  nas_ip          string
+  nas_id          string
+  sta_ip          string
+  vendor          string
+  sess_user       string      == mac when just started, changes to login after auth
+  create_time     int64       now
+  code            string      generated
+  auth_source     string      if class==run and sta_id in auth_cache, values: cache | adopt
+  voucher         string      if class==run and sta_id in auth_cache and auth_cache.Evs(sta_id, "voucher")
+  login           string      if class==run and sta_id in auth_cache and auth_cache.Evs(sta_id, "login")
+  level           string      if class==run and sta_id in auth_cache, from auth_cache
+  authenticated   int64       if class==run and sta_id in auth_cache, now
+                              if class != run, then set in http_server.go when user authenticates
+  auth_method     string      if class==run and sta_id in auth_cache and creating from cache
+                              else set in http_server.go when user chooses auth method on portal
+  state           string      set by class attribute during radius Auth, can be changed on reauth, after CoA
+                              values: run | portal
+  acct_start      int64       now on creation
+  acct_update     int64       now on interim update
+
+  coa_state       string      set by user/admin action or CoA periodic check
+                              values: drop - drop session
+                                      updateXXXXXXX - issue CoA message to reauthenticate, XXXXXX == now
+  coa_sent_state  string      set by CoA daemon after sending CoA message to NAS, used to prevent duplicate sends
+
+  next_state      string      set in http_server.go to indicate, that session is expected to transition to new state
+
+  phone           string      set in http_server.go during sms and 2fa auth
+  sms_in_progress int64       set in http_server.go during sms and 2fa auth
+  sms_error       string
+  sms_sent        int64
+
+  code_failed_count int64
+
+  login_in_progress int64
+  login_failures  int64
+  login_error     string
+  login_fail_time int64
+  logged_in       int64
+
+  voucher_failures int64
+
+
+ldap_users[login]
+  login           string
+  dn              string
+  time            int64       used for sync
+  added           int64
+  enabled         int64       1 - enabled, 0 - disabled (not in ldap query result anymore)
+  disabled        int64       now when enabled 1 -> 0
+  mobile          string
+  mail            string
+  groups          []string    not exist when enable == 0
+  uac             int64
+  name            string
+
+login_devices[login]
+  allowed         int64      optional, using config option if not exists
+  devs[sta_id]    M          optional
+    level         string     optional, using config option if not exists
+    added         int64      now
+    swap_from     int64      now when swapped or added
+    last_portal_logon int64  now on portal auth
+    last_cache_logon int64  now on auth_cache auth
+
+vouchers[voucher]
+  until           int64     unixtime
+  added           int64     now
+  updated         int64     now
+  comment         string
+  by_login        string    admin_login
+  by_name         string    admin_name
+  mailed_to       string    email optional
+  level           string    optional
+  mac             string    added upon activation
+  activated       int64     now, added upon activation
+  last_portal_logon int64     now, set upon login
+  last_cache_logon int64    now, set when auth from cache
+  
+vendors[oui]      string    vendor name
+
