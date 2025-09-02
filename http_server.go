@@ -2413,7 +2413,7 @@ func handleAjax(w http.ResponseWriter, req *http.Request) {
       panic("User has no TOTP")
     }
 
-    mail_totp(ldap_users.VM(login))
+    go mail_totp(ldap_users.VM(login).Copy())
 
     out["done"] = 1 
   } else if action == "add_login_dev" {
