@@ -2905,7 +2905,11 @@ func mail_vouchers(v M, email string) {
 
   message.SetBodyString(mail.TypeTextHTML, html)
 
-  client, err := mail.NewClient(config.Mail_host, mail.WithPort(int(config.Mail_port)))
+  client, err := mail.NewClient(config.Mail_host,
+    mail.WithPort(int(config.Mail_port)),
+    mail.WithoutNoop(),
+  )
+
   if err != nil {
     fmt.Println(err.Error())
     return
@@ -3233,7 +3237,10 @@ func mail_totp(l M) {
 
   message.SetBodyString(mail.TypeTextHTML, html)
 
-  client, err := mail.NewClient(config.Mail_host, mail.WithPort(int(config.Mail_port)))
+  client, err := mail.NewClient(config.Mail_host,
+    mail.WithPort(int(config.Mail_port)),
+    mail.WithoutNoop(),
+  )
   if err != nil {
     fmt.Println(err.Error())
     return
