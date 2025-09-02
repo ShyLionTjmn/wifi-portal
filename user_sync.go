@@ -163,6 +163,7 @@ func ldapSync() {
       ldap_users.VM(login)["disabled"] = now
       delete(ldap_users.VM(login), "groups")
       delete(ldap_users.VM(login), "totp_uri")
+      delete(ldap_users.VM(login), "totp_created")
 
       if login_devices.EvM(login, "devs") {
         for sta_id, _ := range login_devices.VM(login, "devs") {

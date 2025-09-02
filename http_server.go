@@ -1789,6 +1789,9 @@ RENDER_PAGE:
 func getLoginData(login string) M {
 
   login_data := ldap_users.VM(login).Copy()
+  if login_data.Evs("totp_uri") {
+    delete(login_data, "totp_uri")
+  }
 
   if login_devices.EvM(login) {
     out_devs := login_devices.VM(login).Copy()

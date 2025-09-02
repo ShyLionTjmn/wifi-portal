@@ -500,7 +500,7 @@ function login_row(row_data) {
            ;
          };
 
-         if(row_data["totp_uri"] !== undefined) {
+         if(row_data["totp_created"] !== undefined) {
            child_div
             .append( $(DIV)
               .append( $(SPAN).text("Сбросить TOTP Код: ") )
@@ -1042,7 +1042,7 @@ function login_row(row_data) {
          row.child( child_div ).show();
        })
      )
-     .append( row_data["totp_uri"] == undefined ? $(LABEL) : $(LABEL)
+     .append( row_data["totp_created"] == undefined ? $(LABEL) : $(LABEL)
        .css({"margin-left": "0.5em"})
        .title("Show TOTP QR Code")
        .addClass(["button", "ui-icon", "ui-icon-grid"])
@@ -1056,7 +1056,7 @@ function login_row(row_data) {
          let row_data = tr.data("data");
 
          let dialog = $(DIV).addClass("dialog_start")
-          .data("totp_uri", row_data["totp_uri"])
+          //.data("totp_uri", row_data["totp_uri"])
           .title("TOTP QR Код")
           .append( $(DIV).text("Пользователь: " + row_data["login"]) )
           .append( $(DIV).text("Код создан: " + from_unix_time(row_data["totp_created"])) )
