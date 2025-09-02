@@ -1084,7 +1084,7 @@ function login_row(row_data) {
          dialog.appendTo("BODY");
          dialog.dialog( dialog_options );
 
-         dialog.find(".qrcode").qrcode(row_data["totp_uri"]);
+         //dialog.find(".qrcode").qrcode(row_data["totp_uri"]);
        })
      )
    )
