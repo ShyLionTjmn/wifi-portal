@@ -1944,6 +1944,11 @@ func handleAjax(w http.ResponseWriter, req *http.Request) {
     out["is_login_admin"] = is_login_admin
     out["is_voucher_admin"] = is_voucher_admin
 
+    if ldap_users.Evs(user_login, "totp_uri") {
+      out["totp_created"] = ldap_users.Vs(user_login, "totp_created")
+      out["totp_uri"] = ldap_users.Vs(user_login, "totp_uri")
+    }
+
     goto OUT
   } else if action == "sessions" {
     if !is_login_admin && !is_voucher_admin {
@@ -2079,20 +2084,20 @@ func handleAjax(w http.ResponseWriter, req *http.Request) {
     })
 
   } else if action == "reset_totp" {
-    if !is_login_admin {
-      panic("No access")
-    }
-
     if !q.Evs("login") { panic("no login") }
 
     login := q.Vs("login")
 
     if !ldap_users.EvM(login) { panic("No such login") }
 
-    prev := ""
+    if !is_login_admin && login != user_login {
+      panic("No access")
+    }
+
+    //prev := ""
 
     if ldap_users.Evs(login, "totp_uri") {
-      prev = ldap_users.Vs(login, "totp_uri")
+      //prev = ldap_users.Vs(login, "totp_uri")
     } else {
       panic("No totp in account")
     }
@@ -2110,6 +2115,10 @@ func handleAjax(w http.ResponseWriter, req *http.Request) {
 
     out["row"] = getLoginData(login)
 
+    if login == user_login {
+      out.VM("row")["totp_uri"] = totp_key.URL()
+    }
+
     redis_log("audit_log", config.Audit_log_size, M{
       "time": now,
       "action": action,
@@ -2117,8 +2126,8 @@ func handleAjax(w http.ResponseWriter, req *http.Request) {
       "user_name": user_name,
       "user_ip": user_ip,
       "login": login,
-      "totp_uri": totp_key.URL(),
-      "prev": prev,
+      "totp_uri": "",
+      "prev": "",
     })
 
   } else if action == "set_login_dev_level" {

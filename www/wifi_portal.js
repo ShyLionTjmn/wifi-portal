@@ -228,6 +228,14 @@ $( document ).ready(function() {
       ;
     };
 
+    menu
+     .append( $(SPAN).addClass("bigbutton").text("Личный кабинет")
+       .click( function() {
+         window.location = "?action=mypage"+(DEBUG?"&debug":"");
+       })
+     )
+    ;
+
     menu.append( fixed_div );
 
     let action=getUrlParameter("action");
@@ -246,6 +254,9 @@ $( document ).ready(function() {
       break;
     case "auditlog":
       actionAuditLog();
+      break;
+    case "mypage":
+      actionMyPage();
       break;
     };
 
@@ -2269,4 +2280,102 @@ function actionAuditLog() {
     dt.draw();
   });
 
+};
+
+function actionMyPage() {
+  workarea.empty();
+  fixed_div.empty();
+
+  $(DIV)
+   .append( $(SPAN).text("Пользователь: ") )
+   .append( $(SPAN).text(userinfo["name"] + " (" + userinfo["login"] + ")") )
+   .appendTo(workarea)
+  ;
+
+  if(userinfo["totp_created"] !== undefined) {
+    $(DIV)
+     .append( $(LABEL)
+       .text("TOTP Код")
+       .addClass(["button"])
+       .title("Показать код для TOTP авторизации")
+       .click(function() {
+         if( !$(".totp_area").is(":visible") ) {
+           $(".qrcode").empty().qrcode(userinfo["totp_uri"]);
+         };
+         $(".totp_area").toggle();
+       })
+     )
+     .appendTo(workarea)
+    ;
+    $(DIV)
+     .addClass("totp_area")
+     .toggle(false)
+     .append( $(DIV)
+       .append( $(SPAN)
+         .text("Код создан: ")
+       )
+       .append( $(SPAN)
+         .addClass("totp_created")
+         .text( from_unix_time(userinfo["totp_created"]) )
+       )
+     )
+     .append( $(DIV)
+       .append( $(SPAN)
+         .text("Скопировать URI в буфер обмена: ")
+       )
+       .append( $(LABEL)
+         .title("Скопировать URI в буфер обмена")
+         .addClass(["button", "ui-icon", "ui-icon-copy"])
+         .css({"margin-left": "0.5em"})
+         .click(function() {
+           let copytext = userinfo["totp_uri"];
+           if(copytext === undefined) {
+             return;
+           };
+
+           //let flash = $(this).closest("TD").find(".dpsk");
+           try {
+             navigator.clipboard.writeText(copytext).then(
+               function() {
+                 /* clipboard successfully set */
+                 //flash.animateHighlight("green", 300);
+               },
+               function() {
+                 /* clipboard write failed */
+                 window.alert('Opps! Your browser does not support the Clipboard API')
+               }
+             );
+           } catch(e) {
+             alert(e);
+           };
+         })
+       )
+     )
+     .append( $(DIV)
+       .addClass("qrcode")
+     )
+     .append( $(DIV)
+       .append( $(SPAN)
+         .text("Пересоздать новый код: ")
+       )
+       .append( $(LABEL)
+         .title("Пересоздать новый код")
+         .addClass(["button", "ui-icon", "ui-icon-refresh"])
+         .css({"margin-left": "0.5em"})
+         .click(function() {
+           show_confirm_checkbox("Подтвердите действие. Предыдущий код TOTP перестанет действовать.\nВнимание, отмена будет невозможна!", function() {
+             run_query({"action": "reset_totp", "login": userinfo["login"]}, function(res) {
+               userinfo["totp_created"] = res["ok"]["row"]["totp_created"];
+               userinfo["totp_uri"] = res["ok"]["row"]["totp_uri"];
+               $(".totp_created").text( from_unix_time(userinfo["totp_created"]) )
+               $(".qrcode").empty().qrcode(userinfo["totp_uri"]);
+
+              });
+            })
+         })
+       )
+     )
+     .appendTo(workarea)
+    ;
+  };
 };
