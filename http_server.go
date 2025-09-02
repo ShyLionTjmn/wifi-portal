@@ -2905,7 +2905,7 @@ func mail_vouchers(v M, email string) {
 
   message.SetBodyString(mail.TypeTextHTML, html)
 
-  client, err := mail.NewClient(config.Mail_host)
+  client, err := mail.NewClient(config.Mail_host, mail.WithPort(int(config.Mail_port)))
   if err != nil {
     fmt.Println(err.Error())
     return

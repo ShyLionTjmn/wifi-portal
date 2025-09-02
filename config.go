@@ -84,6 +84,8 @@ const DEFAULT_Unifi_scan_period = 10
 
 const DEFAULT_Totp_issuer = "My Corp WiFi"
 
+const DEFAULT_Mail_port = 25
+
 type Unifi_Controller struct {
   Host				string
   Login				string
@@ -209,6 +211,7 @@ type Config struct {
   DPSK_dict                     string
 
   Mail_host                     string
+  Mail_port                     int64
   Mail_from                     string
 
   Support_contact               string
@@ -300,6 +303,8 @@ func LoadConfig(file string, from_opt_c bool) Config {
     Unifi_scan_period:             DEFAULT_Unifi_scan_period,
 
     Totp_issuer:                   DEFAULT_Totp_issuer,
+
+    Mail_port:                     DEFAULT_Mail_port,
 
     Config_origin:                 "Default values",
   }
