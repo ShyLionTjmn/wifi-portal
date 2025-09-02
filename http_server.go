@@ -15,6 +15,10 @@ import (
   "runtime/debug"
   "encoding/json"
   "regexp"
+  "encoding/base64"
+  "bytes"
+  "image"
+  "image/png"
   //"reflect"
   "sort"
   "net/http"
@@ -2384,6 +2388,34 @@ func handleAjax(w http.ResponseWriter, req *http.Request) {
     })
 
     out["row"] = getLoginData(login)
+  } else if action == "mail_login_totp" {
+    if !is_login_admin {
+      panic("No access")
+    }
+
+    if !q.Evs("login") { panic("no login") }
+
+    login := q.Vs("login")
+
+    if !ldap_users.EvM(login) {
+      panic("No login!")
+    }
+
+    if !ldap_users.Evs(login, "mail") {
+      panic("User has no mail")
+    }
+
+    if ldap_users.Vs(login, "mail") == "" {
+      panic("Empty mail")
+    }
+
+    if !ldap_users.Evs(login, "totp_uri") || !ldap_users.Evi(login, "totp_created") {
+      panic("User has no TOTP")
+    }
+
+    mail_totp(ldap_users.VM(login))
+
+    out["done"] = 1 
   } else if action == "add_login_dev" {
     if !is_login_admin {
       panic("No access")
@@ -3127,4 +3159,91 @@ func handleUnifi(w http.ResponseWriter, req *http.Request) {
   */
   //w.Write([]byte("Headers:\n"))
 
+}
+
+func mail_totp(l M) {
+  if config.Mail_host == "" || config.Mail_from == "" { return }
+
+  if !l.Evs("totp_uri") { return }
+  if !l.Evs("mail") { return }
+  if !l.Evi("totp_created") { return }
+
+  if l.Vs("mail") == "" { return }
+
+  email := l.Vs("mail")
+
+  var key *otp.Key
+  var err error
+
+  key, err = otp.NewKeyFromURL(l.Vs("totp_uri"))
+  if err != nil { return }
+
+  var img image.Image
+
+  img, err = key.Image(200, 200)
+	if err != nil {
+		return
+	}
+
+  var buf bytes.Buffer
+
+	png.Encode(&buf, img)
+
+  image64 := base64.StdEncoding.EncodeToString(buf.Bytes())
+
+  b := element.NewBuilder()
+  e := b.Ele
+  t := b.Text
+
+  _ = b.WriteString("<!DOCTYPE html>\n")
+  e("html").R(
+    e("head").R(
+      e("meta", "charset", "UTF-8"),
+    ),
+    e("body").R(
+      e("div").R(
+        e("h2").R(t("Ваш TOTP QR код")),
+      ),
+      e("div").R(
+        e("span").R(t("Время создания ключа: ")),
+        e("span").R(t( time.Unix(l.Vi("totp_created"), 0).Format("15:04:05 02.01.2006") )),
+      ),
+      e("div").R(t("Используйте приложение Google authenticator, FreeOTP+ или подобные")),
+      e("div").R(
+        e("img", "src", "data:image/png;base64," + image64),
+      ),
+    ),
+  )
+
+  html := b.String()
+
+  message := mail.NewMsg()
+
+  if err := message.From(config.Mail_from); err != nil {
+    fmt.Println(err.Error())
+    return
+  }
+
+  if err := message.To(email); err != nil {
+    fmt.Println(err.Error())
+    return
+  }
+
+  message.Subject("Ваш TOTP QR код")
+
+  message.SetBodyString(mail.TypeTextHTML, html)
+
+  client, err := mail.NewClient(config.Mail_host)
+  if err != nil {
+    fmt.Println(err.Error())
+    return
+  }
+
+  client.SetTLSPolicy(mail.NoTLS)
+
+  err = client.DialAndSend(message)
+  if err != nil {
+    fmt.Println(err.Error())
+    return
+  }
 }
