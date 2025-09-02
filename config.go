@@ -80,6 +80,15 @@ const DEFAULT_Audit_log_size = 1000
 const DEFAULT_Portal_log_size = 1000
 const DEFAULT_Radius_log_size = 1000
 
+const DEFAULT_Unifi_scan_period = 10
+
+const DEFAULT_Totp_issuer = "My Corp WiFi"
+
+type Unifi_Controller struct {
+  Host				string
+  Login				string
+  Password			string
+}
 
 type Radius_Client struct {
   Ip                            string
@@ -97,6 +106,10 @@ type AccessLevel struct {
 
 type Config struct {
   Clients                       map[string]Radius_Client
+
+  Unifis			map[string]Unifi_Controller
+  Unifi_scan_period		int64
+
   Redis_socket                  string
   Redis_db                      string
   Redis_err_sleep               uint
@@ -204,6 +217,8 @@ type Config struct {
   Portal_log_size               int64
   Radius_log_size               int64
 
+  Totp_issuer                   string
+
   Config_origin                 string
 }
 
@@ -282,6 +297,10 @@ func LoadConfig(file string, from_opt_c bool) Config {
     Portal_log_size:               DEFAULT_Portal_log_size,
     Radius_log_size:               DEFAULT_Radius_log_size,
 
+    Unifi_scan_period:             DEFAULT_Unifi_scan_period,
+
+    Totp_issuer:                   DEFAULT_Totp_issuer,
+
     Config_origin:                 "Default values",
   }
 
@@ -294,7 +313,8 @@ func LoadConfig(file string, from_opt_c bool) Config {
       log.Fatal("Error unmarshalling config file: " + err.Error())
     }
 
-    if ret.Clients == nil || len(ret.Clients) == 0 {
+    //if ret.Clients == nil || len(ret.Clients) == 0 {
+    if ret.Clients == nil {
       log.Fatal("No servers configured")
     }
 

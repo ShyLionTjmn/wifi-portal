@@ -8,6 +8,7 @@ require (
 	github.com/fatih/color v1.18.0
 	github.com/go-ldap/ldap/v3 v3.4.8
 	github.com/gomodule/redigo v1.9.2
+	github.com/pquerna/otp v1.5.0
 	github.com/rohanthewiz/element v0.4.0
 	github.com/sergle/radius v0.0.2
 	github.com/wneessen/go-mail v0.5.1
@@ -16,6 +17,7 @@ require (
 
 require (
 	github.com/Azure/go-ntlmssp v0.0.0-20221128193559-754e69321358 // indirect
+	github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
 	github.com/go-asn1-ber/asn1-ber v1.5.5 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect

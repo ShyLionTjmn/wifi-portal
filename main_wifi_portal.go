@@ -121,6 +121,9 @@ func KeyGenDict(dict []rune, n int) string {
 
 func main() {
   fmt.Println("wifi_portal starting")
+  if opt_v > 0 {
+    fmt.Println("Log level:", opt_v)
+  }
 
   // load saved sessions and authcache
 
@@ -195,6 +198,11 @@ func main() {
   stop_channels = append(stop_channels, radius_stop_ch)
   wg.Add(1)
   go radius_server(radius_stop_ch, &wg)
+
+  unifi_stop_ch := make(chan string, 1)
+  stop_channels = append(stop_channels, unifi_stop_ch)
+  wg.Add(1)
+  go unifi_server(unifi_stop_ch, &wg)
 
   MAIN_LOOP:
   for {

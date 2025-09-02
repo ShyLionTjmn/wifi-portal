@@ -25,13 +25,15 @@
   <H2>%welcome%</H2>
   <DIV class="random_head %C_random%" onclick="toggle('random_body');">%random_head%</DIV>
   <DIV id="random_body" class="random_body">%random_body%</DIV>
-  <DIV>%select_auth_method%</DIV>
+  <DIV>%totp_authentication%</DIV>
   <DIV>
-    <DIV><H2><A href="?auth_method=sms">SMS</A></H2></DIV>
-    <DIV><H2><A href="?auth_method=voucher">Voucher</A></H2></DIV>
-    <DIV><H2><A href="?auth_method=login">Domain login</A></H2></DIV>
-    <DIV><H2><A href="?auth_method=2fa">Domain login (2FA)</A></H2></DIV>
-    <DIV><H2><A href="?auth_method=totp">TOTP</A></H2></DIV>
+    <DIV class="%C_message_class%">%C_message%</DIV>
+    <FORM id="login_form" method="post" action="?">
+      <LABEL>%enter_login%: </LABEL><INPUT type="text" name="login" placeholder="%login_placeholder%" value=""/><BR>
+      <LABEL>%enter_totp%: </LABEL><INPUT type="text" name="totp_code" value=""/><BR>
+      <INPUT type="submit" name="Ok" value="Ok"/>
+      <INPUT type="hidden" name="auth_method" value="totp"/>
+    </FORM>
   </DIV>
   <DIV class="auth_reset_div">
     <FORM method="post" action="?">

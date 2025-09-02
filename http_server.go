@@ -10,6 +10,7 @@ import (
   "io"
   "strings"
   "slices"
+  "strconv"
   "net"
   "runtime/debug"
   "encoding/json"
@@ -24,6 +25,8 @@ import (
   ldap "github.com/go-ldap/ldap/v3"
   "github.com/gomodule/redigo/redis"
   "github.com/wneessen/go-mail"
+  "github.com/pquerna/otp/totp"
+  "github.com/pquerna/otp"
   . "github.com/ShyLionTjmn/m"
   . "github.com/ShyLionTjmn/mygolib"
 )
@@ -31,6 +34,7 @@ import (
 const PE = "Backend Program error"
 
 const LDAP_BAD_LOGIN_PASS = "Ldap bad login pass"
+const TOTP_BAD_CODE = "Bad TOTP Code"
 
 var epoch = time.Unix(0, 0).Format(time.RFC1123)
 
@@ -41,6 +45,7 @@ var spaces_reg *regexp.Regexp
 var ip_reg *regexp.Regexp
 var mac_reg *regexp.Regexp
 var num_reg *regexp.Regexp
+var site_uri_reg *regexp.Regexp
 
 
 type Msg struct {
@@ -105,6 +110,7 @@ func init() {
   page_split_reg = regexp.MustCompile(`%[0-9a-zA-Z_\-\.]+%`)
   spaces_reg = regexp.MustCompile(`\s+`)
   num_reg = regexp.MustCompile(`^\d+$`)
+  site_uri_reg = regexp.MustCompile(`^/unifi/([a-zA-Z0-9]+)/$`)
 
   templates_cache = M{}
 }
@@ -179,6 +185,7 @@ func http_server(stop chan string, wg *sync.WaitGroup) {
   fsys := dotFileHidingFileSystem{http.Dir(config.Www_root)}
 
   http.HandleFunc("/", handleRoot)
+  http.HandleFunc("/unifi/", handleUnifi)
   http.HandleFunc("/headers", handleHeaders)
   http.HandleFunc("/session/", handlePortalTemplate)
   http.Handle("/admin/", NoCache(http.StripPrefix("/admin/", http.FileServer(fsys))))
@@ -410,6 +417,24 @@ func sendSMS(phone, code string) error {
   return err
 }
 
+func totpAuth(password, uri string) error {
+  var key *otp.Key
+  var err error
+
+  if uri == "" { return errors.New(TOTP_BAD_CODE) }
+
+  key, err = otp.NewKeyFromURL(uri)
+  if err != nil { return err }
+
+  var code_ok bool
+
+  code_ok = totp.Validate(password, key.Secret() )
+
+  if code_ok { return nil }
+
+  return errors.New(TOTP_BAD_CODE)
+}
+
 func ldapAuth(login, password string) error {
   var err error
   var l *ldap.Conn
@@ -544,7 +569,7 @@ func handlePortalTemplate(w http.ResponseWriter, req *http.Request) {
   messages_file := config.Templates_dir + "/" + config.Template + "/messages.json"
   messages_json, _ := getFile(messages_file)
   if messages_json == "" {
-    panic("Cannot load messages file")
+    panic("Cannot load messages file: " + messages_file)
   }
 
   var messages M
@@ -591,6 +616,7 @@ func handlePortalTemplate(w http.ResponseWriter, req *http.Request) {
        req_auth_method == "sms" ||
        req_auth_method == "login" ||
        req_auth_method == "voucher" ||
+       req_auth_method == "totp" ||
     false {
       auth_method = req_auth_method
       sessions.VM(sess_id)["auth_method"] = auth_method
@@ -609,8 +635,18 @@ func handlePortalTemplate(w http.ResponseWriter, req *http.Request) {
       C["message"] = msg.Msg(lang, "authorized_wait")
       C["message_class"] = "shown"
       page = "authorized"
+
+      if sessions.Evs(sess_id, "unifi") && sessions.EvM(sess_id, "unifi_session") &&
+         sessions.EvA(sess_id, "unifi_session", "authorized") &&
+         !sessions.VA(sess_id, "unifi_session", "authorized").(bool) &&
+         sessions.Vs(sess_id, "state") != "run" &&
+      true {
+        sessions.VM(sess_id)["coa_state"] = "update_" + now_str
+        ch_coa <- sess_id
+      }
       goto RENDER_PAGE
     }
+
     login := sessions.Vs(sess_id, "login")
     devs_allowed := config.Devs_allowed_per_login
     if login_devices.Evi(login, "allowed") {
@@ -663,6 +699,8 @@ func handlePortalTemplate(w http.ResponseWriter, req *http.Request) {
         level = config.Default_level_sms
       case "2fa":
         level = config.Default_level_2fa
+      case "totp":
+        level = config.Default_level_login
       default:
         panic("bad auth_method")
       }
@@ -725,6 +763,8 @@ func handlePortalTemplate(w http.ResponseWriter, req *http.Request) {
           level = config.Default_level_sms
         case "2fa":
           level = config.Default_level_2fa
+        case "totp":
+          level = config.Default_level_login
         default:
           panic("bad auth_method")
         }
@@ -1159,6 +1199,139 @@ func handlePortalTemplate(w http.ResponseWriter, req *http.Request) {
           redis_log("portal_log", config.Portal_log_size, M{
             "time": now,
             "event": "login_error",
+            "error": err.Error(),
+            "login": login,
+            "sta_id": sta_id,
+            "session": sessions.VM(sess_id).Copy(),
+          })
+
+        }
+      }
+    } ()
+
+    location("?lang="+lang, w)
+    return
+
+  } else if auth_method == "totp" {
+
+    if sessions.EvA(sess_id, "login_in_progress") {
+      page = "refresh"
+      C["message"] = msg.Msg(lang, "login_in_progress")
+      C["message_class"] = "shown"
+      C["lang"] = lang
+      goto RENDER_PAGE
+    }
+
+    C["message"] = ""
+    C["message_class"] = "hidden"
+
+    if sessions.Evi(sess_id, "login_failures") &&
+       sessions.Vi(sess_id, "login_failures") >= config.Max_login_failures &&
+    true {
+      C["message_class"] = "shown_error"
+      C["message"] = msg.Msg(lang, "too_many_logon_attempts")
+      page = "message"
+      goto RENDER_PAGE
+    }
+
+    if sessions.Evi(sess_id, "login_failures") {
+      C["message_class"] = "shown_error"
+      C["message"] = msg.Msg(lang, "bad_login_password")
+    }
+
+    login := req.FormValue("login")
+    login, _, _ = strings.Cut(login, "@")
+    login = strings.ToLower(strings.TrimSpace(login))
+    password := req.FormValue("totp_code")
+
+    if login == "" || password == "" {
+      if sessions.Evs(sess_id, "login_error") {
+        C["message_class"] = "shown_error"
+        C["message"] = sessions.Vs(sess_id, "login_error")
+      }
+      page = "totp"
+      goto RENDER_PAGE
+    }
+
+    if !rateCheck(user_ip) {
+      panic("Too many requests")
+    }
+
+    if !ldap_users.EvM(login) || ldap_users.Vi(login, "enabled") != 1 {
+      C["message_class"] = "shown_error"
+      C["message"] = msg.Msg(lang, "no_user_access")
+      page = "totp"
+
+      redis_log("portal_log", config.Portal_log_size, M{
+        "time": now,
+        "event": "bad_login",
+        "reason": "no_login_or_disabled",
+        "login": login,
+        "sta_id": sta_id,
+        "session": sessions.VM(sess_id).Copy(),
+      })
+      goto RENDER_PAGE
+    }
+
+    redis_log("portal_log", config.Portal_log_size, M{
+      "time": now,
+      "event": "totp_check",
+      "login": login,
+      "sta_id": sta_id,
+      "session": sessions.VM(sess_id).Copy(),
+    })
+
+    username := ldap_users.Vs(login, "name")
+    sessions.VM(sess_id)["username"] = username
+
+    sessions.VM(sess_id)["login_in_progress"] = int64(1)
+
+    totp_uri := ""
+    if ldap_users.Evs(login, "totp_uri") {
+      totp_uri = ldap_users.Vs(login, "totp_uri")
+    }
+
+    go func() {
+
+      err := totpAuth(password, totp_uri)
+
+      globalMutex.Lock()
+      defer globalMutex.Unlock()
+
+      delete(sessions.VM(sess_id), "login_in_progress")
+
+      if err == nil {
+        delete(sessions.VM(sess_id), "login_error")
+        sessions.VM(sess_id)["authenticated"] = now
+        sessions.VM(sess_id)["auth_source"] = "totp"
+        sessions.VM(sess_id)["login"] = login
+      } else {
+        if err.Error() == TOTP_BAD_CODE {
+          fails := int64(0)
+          if sessions.Evi(sess_id, "login_failures") {
+            fails = sessions.Vi(sess_id, "login_failures")
+          }
+          fails ++
+          sessions.VM(sess_id)["login_failures"] = fails
+          sessions.VM(sess_id)["login_fail_time"] = now
+
+          sessions.VM(sess_id)["login_error"] = msg.Msg(lang, "bad_login_totp")
+
+          redis_log("portal_log", config.Portal_log_size, M{
+            "time": now,
+            "event": "totp_fail",
+            "count": fails,
+            "login": login,
+            "sta_id": sta_id,
+            "session": sessions.VM(sess_id).Copy(),
+          })
+
+        } else {
+          sessions.VM(sess_id)["login_error"] = "TOTP Auth err: " + err.Error()
+
+          redis_log("portal_log", config.Portal_log_size, M{
+            "time": now,
+            "event": "totp_error",
             "error": err.Error(),
             "login": login,
             "sta_id": sta_id,
@@ -1902,6 +2075,49 @@ func handleAjax(w http.ResponseWriter, req *http.Request) {
       "prev": prev,
     })
 
+  } else if action == "reset_totp" {
+    if !is_login_admin {
+      panic("No access")
+    }
+
+    if !q.Evs("login") { panic("no login") }
+
+    login := q.Vs("login")
+
+    if !ldap_users.EvM(login) { panic("No such login") }
+
+    prev := ""
+
+    if ldap_users.Evs(login, "totp_uri") {
+      prev = ldap_users.Vs(login, "totp_uri")
+    } else {
+      panic("No totp in account")
+    }
+
+    totp_key, kerr := totp.Generate(totp.GenerateOpts{
+      Issuer: config.Totp_issuer,
+      AccountName: login,
+    })
+
+    if kerr == nil {
+      ldap_users.VM(login)["totp_uri"] = totp_key.URL()
+      ldap_users.VM(login)["totp_created"] = now
+    }
+
+
+    out["row"] = getLoginData(login)
+
+    redis_log("audit_log", config.Audit_log_size, M{
+      "time": now,
+      "action": action,
+      "user_login": user_login,
+      "user_name": user_name,
+      "user_ip": user_ip,
+      "login": login,
+      "totp_uri": totp_key.URL(),
+      "prev": prev,
+    })
+
   } else if action == "set_login_dev_level" {
     if !is_login_admin {
       panic("No access")
@@ -1949,6 +2165,8 @@ func handleAjax(w http.ResponseWriter, req *http.Request) {
           target_level = config.Default_level_sms
         case "2fa":
           target_level = config.Default_level_2fa
+        case "totp":
+          target_level = config.Default_level_login
         default:
           panic("Cannot choose default level")
         }
@@ -2372,6 +2590,8 @@ func handleAjax(w http.ResponseWriter, req *http.Request) {
             target_level = config.Default_level_sms
           case "2fa":
             target_level = config.Default_level_2fa
+          case "totp":
+            target_level = config.Default_level_login
           default:
             panic("Cannot choose default level")
           }
@@ -2672,4 +2892,227 @@ func redis_log(log_name string, log_limit int64, rec M) {
     red.Do("LPUSH", config.Redis_prefix + log_name, rec.ToJsonStr(false))
     red.Do("LTRIM", config.Redis_prefix + log_name, 0, log_limit)
   } ()
+}
+
+func FormatMAC(anymac string) string {
+  mac_a := mac_reg.FindStringSubmatch(anymac)
+  if mac_a == nil { return "" }
+
+  return strings.ToLower(mac_a[1] + mac_a[2] + "-" + mac_a[3] + mac_a[4] + "-" + mac_a[5] + mac_a[6])
+}
+
+func handleUnifi(w http.ResponseWriter, req *http.Request) {
+  if req.Method == "OPTIONS" {
+    w.Header().Set("Access-Control-Allow-Origin", "*")
+    w.Header().Set("Access-Control-Allow-Methods", "*")
+    w.Header().Set("Access-Control-Allow-Headers", "*")
+    w.WriteHeader(http.StatusOK)
+    return
+  }
+
+  defer func() { handle_error_html(recover(), w, req) } ()
+
+  now := time.Now().Unix()
+
+  // find user session
+
+  remote_addr := req.RemoteAddr
+
+  ip_a := remote_addr_reg.FindStringSubmatch(remote_addr)
+  if ip_a == nil {
+    panic("bad remote addr")
+  }
+
+  user_ip := ip_a[1]
+
+  if config.Proxy_host != "" && config.Client_ip_header != "" {
+    if user_ip != config.Proxy_host {
+      panic("access denied for " + user_ip)
+    }
+
+    if header_values, ex := req.Header[config.Client_ip_header]; !ex || len(header_values) == 0 {
+      panic("invalid headers")
+    }
+
+    user_ip = req.Header[config.Client_ip_header][0]
+
+    if !ip_reg.MatchString(user_ip) {
+      panic("bad header value")
+    }
+  }
+
+
+  once := &sync.Once{}
+
+  globalMutex.Lock()
+
+  defer func() {
+    once.Do(func() {
+      globalMutex.Unlock()
+    })
+  } ()
+
+  path_a := site_uri_reg.FindStringSubmatch(req.URL.Path)
+  if path_a == nil { panic("Bad url path") }
+
+  unifi_site := path_a[1]
+
+  unifi_controller := req.FormValue("unifi_controller")
+  if unifi_controller == "" { panic("Bad unifi_controller") }
+
+  if config.Unifis == nil { panic("No Unifis in config") }
+  if _, ex := config.Unifis[unifi_controller]; !ex {
+    panic("No Unifi in config")
+  }
+
+
+  sta_id := FormatMAC(req.FormValue("id"))
+  if sta_id == "" { panic("Bad MAC") }
+
+  ap_id := FormatMAC(req.FormValue("ap"))
+  _ = ap_id
+
+  ssid := req.FormValue("ssid")
+
+  check_ts := req.FormValue("t")
+  if !num_reg.MatchString(check_ts) { panic("Bad time") }
+
+  check_t, terr := strconv.ParseInt(check_ts, 10, 64)
+  if terr != nil { panic("Bad time value") }
+
+  time_diff := now - check_t
+  if time_diff < -2 || time_diff > 2 { panic("Too old URL: " + fmt.Sprint(time_diff)) }
+
+
+  sess_id := unifi_controller + "/" + unifi_site + "/" + user_ip + "/" + sta_id + "/" + ssid
+
+  for _sess_id, _ := range sessions {
+    if sessions.Evs(_sess_id, "sta_id") && sessions.Vs(_sess_id, "sta_id") == sta_id &&
+       sessions.Evs(_sess_id, "sta_ip") && sessions.Vs(_sess_id, "sta_ip") == user_ip &&
+       sessions.Evs(_sess_id, "unifi") && sessions.Vs(_sess_id, "unifi") == "1" &&
+       sessions.Evs(_sess_id, "unifi_site") && sessions.Vs(_sess_id, "unifi_site") == unifi_site &&
+       sessions.Evs(_sess_id, "unifi_controller") && sessions.Vs(_sess_id, "unifi_controller") == unifi_controller &&
+       sessions.Evs(_sess_id, "ssid") && sessions.Vs(_sess_id, "ssid") == ssid &&
+    true {
+      sess_id = _sess_id
+      break
+    }
+  }
+
+  if !sessions.EvM(sess_id) {
+
+    sessions[sess_id] = M{
+      "sess_id": sess_id,
+      "sta_id": sta_id,
+      "unifi": "1",
+      "sta_ip": user_ip,
+      "acct_update": now,
+      "acct_start": now,
+      "unifi_controller": unifi_controller,
+      "unifi_site": unifi_site,
+      "ssid": ssid,
+      "unifi_mac": req.FormValue("id"),
+      "state": "portal",
+      "code": KeyGenDict([]rune(config.Sms_code_dict), config.Sms_code_length),
+      "create_time": now,
+    }
+    
+    sess_class := "portal"
+
+    if random_reg.MatchString(sta_id) {
+      sessions.VM(sess_id)["vendor"] = "Random"
+    } else {
+      m := mac_reg.FindStringSubmatch(sta_id)
+      oui := strings.ToLower(strings.Join(m[1:4], ""))
+
+      vendor, ex := vendors[oui]
+
+      if ex {
+        sessions.VM(sess_id)["vendor"] = vendor
+      } else {
+        sessions.VM(sess_id)["vendor"] = "Unknown"
+      }
+    }
+
+    if auth_cache.Evi(sta_id, "time") &&
+       (auth_cache.Vi(sta_id, "time") + config.Reauth_period) > now &&
+       auth_cache.Evs(sta_id, "login") &&
+    true {
+      sessions.VM(sess_id)["next_state"] = "run"
+      sess_class = "run"
+
+      sessions.VM(sess_id)["authenticated"] = now
+      sessions.VM(sess_id)["auth_source"] = "cache"
+
+      login := auth_cache.Vs(sta_id, "login")
+
+      sessions.VM(sess_id)["login"] = login
+      sessions.VM(sess_id)["level"] = auth_cache.Vs(sta_id, "level")
+
+      if login_devices.EvM(login, "devs", sta_id) {
+        login_devices.VM(login, "devs", sta_id)["last_cache_logon"] = now
+      }
+
+      if auth_cache.Evs(sta_id, "auth_method") {
+        sessions.VM(sess_id)["auth_method"] = auth_cache.Vs(sta_id, "auth_method")
+      }
+    }
+
+    if auth_cache.Evs(sta_id, "voucher") &&
+       vouchers.EvM( auth_cache.Vs(sta_id, "voucher") ) &&
+       vouchers.Vs( auth_cache.Vs(sta_id, "voucher"), "mac") == sta_id &&
+       vouchers.Vi( auth_cache.Vs(sta_id, "voucher"), "until") > now &&
+    true {
+      sessions.VM(sess_id)["next_state"] = "run"
+      sess_class = "run"
+
+      sessions.VM(sess_id)["authenticated"] = now
+      sessions.VM(sess_id)["auth_source"] = "cache"
+
+      voucher := auth_cache.Vs(sta_id, "voucher")
+
+      sessions.VM(sess_id)["voucher"] = voucher
+      sessions.VM(sess_id)["level"] = auth_cache.Vs(sta_id, "level")
+
+      vouchers.VM(voucher)["last_cache_logon"] = now
+
+
+      if auth_cache.Evs(sta_id, "auth_method") {
+        sessions.VM(sess_id)["auth_method"] = auth_cache.Vs(sta_id, "auth_method")
+      }
+    }
+
+    redis_log("radius_log", config.Radius_log_size, M{
+      "time": now,
+      "message": "Acct session create",
+      "state": sess_class,
+      "sta_id": sta_id,
+      "sta_ip": user_ip,
+      "session": sessions.VM(sess_id).Copy(),
+    })
+
+  }
+
+  once.Do(func() {
+    globalMutex.Unlock()
+  })
+
+  location(config.Redir_uri, w)
+
+  //w.Header().Set("Content-Type", "text/html; charset=UTF-8")
+  /*
+  w.Header().Set("Content-Type", "text/plain; charset=UTF-8")
+  w.Header().Set("Cache-Control", "no-cache")
+  w.Header().Set("Access-Control-Allow-Origin", "*")
+  w.Header().Set("Access-Control-Allow-Methods", "*")
+  w.Header().Set("Access-Control-Allow-Headers", "*")
+
+  w.Write([]byte("User IP: " + user_ip + "\n"))
+  w.Write([]byte("Site: " + unifi_site + "\n"))
+  w.Write([]byte("Sta-id: " + sta_id + "\n"))
+  w.Write([]byte("AP-id: " + ap_id + "\n"))
+  w.Write([]byte("SSID: " + ssid + "\n"))
+  */
+  //w.Write([]byte("Headers:\n"))
+
 }

@@ -15,6 +15,9 @@ import (
   //"github.com/sergle/radius/client"
   . "github.com/ShyLionTjmn/m"
   //. "github.com/ShyLionTjmn/mygolib"
+  "crypto/tls"
+  "net/http"
+  "net/http/cookiejar"
 )
 
 type radiusService struct{}
@@ -80,7 +83,7 @@ func (p radiusService) RadiusHandle(request *radius.Packet) (npac *radius.Packet
       case radius.AccessRequest:
         npac.Code = radius.AccessReject
       case radius.AccountingRequest:
-		    npac.Code = radius.AccountingResponse
+        npac.Code = radius.AccountingResponse
       default:
         npac.Code = radius.AccessReject
       }
@@ -174,8 +177,8 @@ func (p radiusService) RadiusHandle(request *radius.Packet) (npac *radius.Packet
     secure = true
   }
 
-	switch request.Code {
-	case radius.AccessRequest:
+  switch request.Code {
+  case radius.AccessRequest:
 
     if secure {
       last_login := int64(0)
@@ -408,7 +411,7 @@ func (p radiusService) RadiusHandle(request *radius.Packet) (npac *radius.Packet
 
     //fmt.Println(now_debug + "Auth sta: " +sta_id + " sess: " + sess_id + " class: " + sess_class)
 
-	case radius.AccountingRequest:
+  case radius.AccountingRequest:
     var sess_class string
 
     if SessClassAVP == nil {
@@ -708,39 +711,120 @@ func coa_server(stop chan string, wg *sync.WaitGroup) {
     }
     globalMutex.Unlock()
 
-    for _, coa := range coa_queue {
-      nas_id := coa.session.Vs("nas_id")
+    unifis := make(map[string]*http.Client)
 
+    for _, coa := range coa_queue {
       redis_log("radius_log", config.Radius_log_size, M{
         "time": now,
         "message": "CoA action",
         "action": coa.action,
         "session": coa.session,
       })
+  
+      if coa.session.Evs("unifi") {
+        unifi_controller := coa.session.Vs("unifi_controller")
+	if config.Unifis != nil {
+          if _, ex := config.Unifis[unifi_controller]; ex {
 
-      if client, ex := clients[nas_id]; ex {
-        var request *radius.Packet
-        if coa.action == "drop" {
-          request = client.NewRequest(radius.DisconnectRequest)
-        } else {
-          request = client.NewRequest(radius.CoARequest)
-          request.AddVSA( dict.NewVSA("Huawei", "Huawei-Ext-Specific", "user-command=1") )
-        }
-        request.AddAVP( radius.AVP{Type: radius.AcctSessionId, Value: []byte(coa.sess_id)} )
+	    if _, ex := unifis[unifi_controller]; !ex {
+	      cj, _ := cookiejar.New(nil)
+	      tr := &http.Transport{
+                TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+              }
 
-        reply, err := client.Send(request)
-        _ = reply
+	      unifis[unifi_controller] = &http.Client {
+                Timeout: 5*time.Second,
+                Transport: tr,
+                Jar: cj,
+              }
 
-        if err != nil {
-            fmt.Println(now_debug + "Error: ", err.Error())
-        } else {
-          globalMutex.Lock()
-          if sessions.EvM(coa.sess_id) {
-            sessions.VM(coa.sess_id)["coa_sent_state"] = coa.action
+	      uerr := UnifiLogin(unifis[unifi_controller], unifi_controller)
+	      if uerr != nil {
+		fmt.Println(now_debug + "Error: ", uerr.Error())
+		unifis[unifi_controller] = nil
+		continue
+	      }
+	    } else {
+	      if unifis[unifi_controller] == nil {
+		continue
+	      }
+	    }
+
+	    post_data := M{
+	      "mac": coa.session.Vs("unifi_mac"),
+	    }
+
+	    post_uri := "/api/s/" + coa.session.Vs("unifi_site") + "/cmd/stamgr"
+
+	    var perr error
+
+	    if coa.action == "drop" {
+              post_data["cmd"] = "unauthorize-guest"
+
+	      _, perr = UnifiPost(unifis[unifi_controller], unifi_controller, post_uri, post_data)
+	      if perr != nil {
+		fmt.Println(now_debug + "Error: unauthorize-guest:", perr.Error())
+              } else {
+	        post_data["cmd"] = "kick-sta"
+		_, perr = UnifiPost(unifis[unifi_controller], unifi_controller, post_uri, post_data)
+		if perr != nil && perr.Error() == "UniFi error: api.err.UnknownStation" {
+		  perr = nil
+		}
+		if perr != nil { fmt.Println(now_debug + "Error: kick-sta:", perr.Error()) }
+	      }
+                
+	    } else {
+	      if coa.session.Vs("next_state") == "run" {
+		post_data["cmd"] = "authorize-guest"
+	      } else {
+		post_data["cmd"] = "unauthorize-guest"
+	      }
+	      _, perr = UnifiPost(unifis[unifi_controller], unifi_controller, post_uri, post_data)
+              if perr != nil { fmt.Println(now_debug + "Error: ", perr.Error()) }
+	    }
+
+
+	    if perr == nil {
+
+              globalMutex.Lock()
+              if sessions.EvM(coa.sess_id) {
+                sessions.VM(coa.sess_id)["coa_sent_state"] = coa.action
+              }
+
+	      if coa.action == "drop" {
+		delete(sessions, coa.sess_id)
+	      }
+              globalMutex.Unlock()
+	    }
+	  }
+	}
+      } else { // not unifi
+        nas_id := coa.session.Vs("nas_id")
+  
+        if client, ex := clients[nas_id]; ex {
+          var request *radius.Packet
+          if coa.action == "drop" {
+            request = client.NewRequest(radius.DisconnectRequest)
+          } else {
+            request = client.NewRequest(radius.CoARequest)
+            request.AddVSA( dict.NewVSA("Huawei", "Huawei-Ext-Specific", "user-command=1") )
           }
-          globalMutex.Unlock()
+          request.AddAVP( radius.AVP{Type: radius.AcctSessionId, Value: []byte(coa.sess_id)} )
+  
+          reply, err := client.Send(request)
+          _ = reply
+  
+          if err != nil {
+              fmt.Println(now_debug + "Error: ", err.Error())
+          } else {
+            globalMutex.Lock()
+            if sessions.EvM(coa.sess_id) {
+              sessions.VM(coa.sess_id)["coa_sent_state"] = coa.action
+            }
+            globalMutex.Unlock()
+          }
         }
-      }
+      } // not unifi
     }
   }
 }

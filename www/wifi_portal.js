@@ -500,6 +500,36 @@ function login_row(row_data) {
            ;
          };
 
+         if(row_data["totp_uri"] !== undefined) {
+           child_div
+            .append( $(DIV)
+              .append( $(SPAN).text("Сбросить TOTP Код: ") )
+              .append( $(LABEL)
+                .addClass(["button", "ui-icon", "ui-icon-refresh"])
+                .addClass("totp_reset_btn")
+                .click(function() {
+                  let tr = $(this).closest(".child").data("tr");
+                  let table = tr.closest("TABLE");
+                  let row_data = tr.data("data");
+                  let dt = table.DataTable();
+                  let row = dt.row(tr);
+
+                  show_confirm_checkbox("Подтвердите действие. Пользователю потребуется получить новый код TOTP.\nВнимание, отмена будет невозможна!", function() {
+                    run_query({"action": "reset_totp", "login": row_data["login"]}, function(res) {
+                      let new_tr = login_row(res["ok"]["row"]);
+
+                      row.remove();
+                      dt.row.add(new_tr);
+                      dt.draw();
+                      new_tr.find(".edit_btn").trigger("click");
+                    });
+                  })
+                })
+              )
+            )
+           ;
+         };
+
          child_div
           .append( $(DIV)
             .append( $(SPAN).text("Лимит устройств: ")
@@ -1010,6 +1040,51 @@ function login_row(row_data) {
          ;
 
          row.child( child_div ).show();
+       })
+     )
+     .append( row_data["totp_uri"] == undefined ? $(LABEL) : $(LABEL)
+       .css({"margin-left": "0.5em"})
+       .title("Show TOTP QR Code")
+       .addClass(["button", "ui-icon", "ui-icon-grid"])
+       .addClass("qr_btn")
+       .click(function() {
+         let tr = $(this).closest("TR");
+         let table = tr.closest("TABLE");
+         let dt = table.DataTable();
+         let row = dt.row(tr);
+
+         let row_data = tr.data("data");
+
+         let dialog = $(DIV).addClass("dialog_start")
+          .data("totp_uri", row_data["totp_uri"])
+          .title("TOTP QR Код")
+          .append( $(DIV).text("Пользователь: " + row_data["login"]) )
+          .append( $(DIV).text("Код создан: " + from_unix_time(row_data["totp_created"])) )
+          .append( $(DIV).addClass("qrcode") )
+         ;
+
+         let buttons = [];
+
+         buttons.push({
+           'text': 'Закрыть',
+           'click': function() { $(this).dialog( "close" ); },
+         });
+
+         let dialog_options = {
+           modal:true,
+           width: "auto",
+           eight: "auto",
+           buttons: buttons,
+           close: function() {
+             $(this).dialog("destroy");
+             $(this).remove();
+           }
+         };
+
+         dialog.appendTo("BODY");
+         dialog.dialog( dialog_options );
+
+         dialog.find(".qrcode").qrcode(row_data["totp_uri"]);
        })
      )
    )
