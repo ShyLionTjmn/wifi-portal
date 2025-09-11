@@ -41,6 +41,7 @@ var ch_coa chan string
 
 var phone_reg *regexp.Regexp
 var ldap_groups_reg *regexp.Regexp
+var ldap_dn_reg *regexp.Regexp
 
 var login_admins_reg *regexp.Regexp
 var voucher_admins_reg *regexp.Regexp
@@ -60,6 +61,7 @@ func init() {
 
   phone_reg = regexp.MustCompile(config.Phone_reg)
   ldap_groups_reg = regexp.MustCompile(config.Ldap_groups_reg)
+  ldap_dn_reg = regexp.MustCompile(config.Ldap_dn_regexp)
 
   login_admins_reg = regexp.MustCompile(config.Login_admins_group_reg)
   voucher_admins_reg = regexp.MustCompile(config.Voucher_admins_group_reg)

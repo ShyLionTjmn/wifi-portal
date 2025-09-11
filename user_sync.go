@@ -125,6 +125,7 @@ func ldapSync() {
 
     if login != "" && uac != 0 && len(user_groups) > 0 &&
        name != "" &&
+       ldap_dn_reg.MatchString(entry.DN) &&
     true {
       // user is valid for authentication
       user_row := M{

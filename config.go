@@ -53,6 +53,8 @@ const DEFAULT_LDAP_USERS_QUERY = `(&(userAccountControl:1.2.840.113556.1.4.803:=
 const DEFAULT_LDAP_PAGE_SIZE = 1000
 const DEFAULT_LDAP_TIMEOUT = 5 //seconds
 
+const DEFAULT_Ldap_dn_regexp = `.*`
+
 const DEFAULT_MAX_LOGIN_FAILURES = 3
 // const DEFAULT_LOGIN_LOCKOUT_TIME = 300 //seconds // WHY have it at all?
 
@@ -175,6 +177,7 @@ type Config struct {
   Ldap_timeout                  int64
   Ldap_groups_reg               string
   Ldap_domain                   string
+  Ldap_dn_regexp                string
 
   Mysql_dsn                     string
 
@@ -277,6 +280,7 @@ func LoadConfig(file string, from_opt_c bool) Config {
     Ldap_users_query:              DEFAULT_LDAP_USERS_QUERY,
     Ldap_page_size:                DEFAULT_LDAP_PAGE_SIZE,
     Ldap_timeout:                  DEFAULT_LDAP_TIMEOUT,
+    Ldap_dn_regexp:                DEFAULT_Ldap_dn_regexp,
 
     Stale_session_age:             DEFAULT_STALE_SESSION_AGE,
 
