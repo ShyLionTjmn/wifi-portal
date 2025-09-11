@@ -3029,7 +3029,7 @@ func handleUnifi(w http.ResponseWriter, req *http.Request) {
   if terr != nil { panic("Bad time value") }
 
   time_diff := now - check_t
-  if time_diff < -2 || time_diff > 2 { panic("Too old URL: " + fmt.Sprint(time_diff)) }
+  if time_diff < -config.Unifi_max_redir_age || time_diff > config.Unifi_max_redir_age { panic("Too old URL: " + fmt.Sprint(time_diff)) }
 
 
   sess_id := unifi_controller + "/" + unifi_site + "/" + user_ip + "/" + sta_id + "/" + ssid

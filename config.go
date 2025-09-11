@@ -83,6 +83,7 @@ const DEFAULT_Portal_log_size = 1000
 const DEFAULT_Radius_log_size = 1000
 
 const DEFAULT_Unifi_scan_period = 10
+const DEFAULT_Unifi_max_redir_age = 60
 
 const DEFAULT_Totp_issuer = "My Corp WiFi"
 
@@ -111,8 +112,9 @@ type AccessLevel struct {
 type Config struct {
   Clients                       map[string]Radius_Client
 
-  Unifis			map[string]Unifi_Controller
-  Unifi_scan_period		int64
+  Unifis                        map[string]Unifi_Controller
+  Unifi_scan_period             int64
+  Unifi_max_redir_age           int64
 
   Redis_socket                  string
   Redis_db                      string
@@ -305,6 +307,7 @@ func LoadConfig(file string, from_opt_c bool) Config {
     Radius_log_size:               DEFAULT_Radius_log_size,
 
     Unifi_scan_period:             DEFAULT_Unifi_scan_period,
+    Unifi_max_redir_age:           DEFAULT_Unifi_max_redir_age,
 
     Totp_issuer:                   DEFAULT_Totp_issuer,
 

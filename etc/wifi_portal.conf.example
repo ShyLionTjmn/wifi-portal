@@ -64,5 +64,6 @@
   "Mail_host": "10.0.18.21",
   "Mail_from": "wifi-portal@domain.com",
   "Support_contact": "call me here",
+  "Unifi_max_redir_age": 60,
   "_end": ""
 }
