@@ -22,9 +22,10 @@
   "Proxy_host": "10.0.19.12",
 
   "Ldap_sync_period": 300,
-  "Ldap_users_query": "(&(userAccountControl:1.2.840.113556.1.4.803:=512)(!(userAccountControl:1.2.840.113556.1.4.803:=2))(|(memberOf=CN=usr_wifi_access_full,OU=WiFi,OU=IS access,OU=Groups,DC=domain,DC=example)(memberof=CN=usr_wifi_access_guest,OU=WiFi,OU=IS access,OU=Groups,DC=domain,DC=example)(memberof=CN=usr_wifi_access_default,OU=WiFi,OU=IS access,OU=Groups,DC=domain,DC=example)(memberof=CN=usr_ou-personnel,OU=Security,OU=Groups,DC=domain,DC=example)))",
+  "Ldap_users_query": "(&(objectClass=user)(objectClass=person)(objectClass=organizationalPerson)(userAccountControl:1.2.840.113556.1.4.803:=512)(!(userAccountControl:1.2.840.113556.1.4.803:=2))(|(memberOf=CN=usr_wifi_access_full,OU=WiFi,OU=IS access,OU=Groups,DC=domain,DC=example)(memberof=CN=usr_wifi_access_guest,OU=WiFi,OU=IS access,OU=Groups,DC=domain,DC=example)(memberof=CN=usr_wifi_access_default,OU=WiFi,OU=IS access,OU=Groups,DC=domain,DC=example)(memberof=CN=usr_ou-personnel,OU=Security,OU=Groups,DC=domain,DC=example)))",
   "_Ldap_groups_reg": "(?i:^cn=usr_wifi_access_[^,]+,)",
   "Ldap_groups_reg": "(?i:^cn=usr_wifi_access_[^,]+,|^cn=usr_ou-personnel,)",
+  "Ldap_dn_regexp": ".*",
   "Ldap_page_size": 1000,
   "Ldap_search_base": "DC=domain,DC=example",
   "Ldap_uri": "ldap://ldap.domain.dom:389",
