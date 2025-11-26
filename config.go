@@ -15,6 +15,8 @@ const DEFAULT_REDIS_PREFIX="wifi_portal."
 const DEFAULT_WWW_PORT = 8002
 const DEFAULT_WWW_ROOT = "/opt/wifi_portal/www/"
 
+const DEFAULT_DEV_PORT = 8003
+
 const DEFAULT_ADMIN_GROUP = "usr_netapp_wifi_admins"
 
 //const DEFAULT_REAUTH_PERIOD = 60*5 //seconds. make it reasonable
@@ -36,7 +38,7 @@ const DEFAULT_MAX_SMS_TRIES = 3
 
 const DEFAULT_DEVS_ALLOWED_PER_LOGIN = 1
 
-const DEFAULT_PHONE_CHANGE_PERIOD = 300 //seconds
+//const DEFAULT_PHONE_CHANGE_PERIOD = 300 //seconds
 //const DEFAULT_PHONE_CHANGE_PERIOD = 20 //seconds
 
 const DEFAULT_MIN_DEV_SWAP_PERIOD = 60*60*24*7 //?
@@ -124,6 +126,8 @@ type Config struct {
   Www_port                      uint
   Www_root                      string
 
+  Dev_port                      uint
+
   Redir_uri                     string
   Proxy_host                    string
   Client_ip_header              string
@@ -149,7 +153,7 @@ type Config struct {
 
   Max_sms_tries                 int64
 
-  Phone_change_period           int64
+  // Phone_change_period           int64
 
   Devs_allowed_per_login        int64
 
@@ -242,6 +246,8 @@ func LoadConfig(file string, from_opt_c bool) Config {
     Www_port:                      DEFAULT_WWW_PORT,
     Www_root:                      DEFAULT_WWW_ROOT,
 
+    Dev_port:                      DEFAULT_DEV_PORT,
+
     Redir_uri:                     "https://change.me/wifi_portal/portal/",
     Client_ip_header:              DEFAULT_CLIENT_IP_HEADER,
 
@@ -267,7 +273,7 @@ func LoadConfig(file string, from_opt_c bool) Config {
 
     //Login_lockout_time:            DEFAULT_LOGIN_LOCKOUT_TIME,
 
-    Phone_change_period:           DEFAULT_PHONE_CHANGE_PERIOD,
+    // Phone_change_period:           DEFAULT_PHONE_CHANGE_PERIOD,
 
     Devs_allowed_per_login:        DEFAULT_DEVS_ALLOWED_PER_LOGIN,
 

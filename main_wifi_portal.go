@@ -142,8 +142,8 @@ func main() {
     var rerr error
 
     red, rerr = RedisCheck(red, "unix", config.Redis_socket, config.Redis_db)
-    for rerr != nil && strings.Contains(rerr.Error(), "LOADING Redis is loading the dataset in memory" {
-    }
+    //for rerr != nil && strings.Contains(rerr.Error(), "LOADING Redis is loading the dataset in memory") {
+    //}
 
     if rerr != nil { log.Fatal(rerr.Error()) }
 

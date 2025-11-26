@@ -50,6 +50,7 @@ var ip_reg *regexp.Regexp
 var mac_reg *regexp.Regexp
 var num_reg *regexp.Regexp
 var site_uri_reg *regexp.Regexp
+var template_reg *regexp.Regexp
 
 
 type Msg struct {
@@ -115,6 +116,8 @@ func init() {
   spaces_reg = regexp.MustCompile(`\s+`)
   num_reg = regexp.MustCompile(`^\d+$`)
   site_uri_reg = regexp.MustCompile(`^/unifi/([a-zA-Z0-9]+)/$`)
+
+  template_reg = regexp.MustCompile(`^[0-9a-zA-Z_\-]+$`)
 
   templates_cache = M{}
 }
@@ -195,6 +198,8 @@ func http_server(stop chan string, wg *sync.WaitGroup) {
   http.Handle("/admin/", NoCache(http.StripPrefix("/admin/", http.FileServer(fsys))))
   http.HandleFunc("/admin/ajax", handleAjax)
   http.HandleFunc("/admin/consts.js", handleConsts)
+
+  http.HandleFunc("/pages", handlePages)
 
   listener, listen_err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", config.Www_port))
   if listen_err != nil {
@@ -569,6 +574,8 @@ func handlePortalTemplate(w http.ResponseWriter, req *http.Request) {
   if lang == "" {
     lang = config.Default_lang
   }
+
+  C["refresh_delay"] = "1"
 
   messages_file := config.Templates_dir + "/" + config.Template + "/messages.json"
   messages_json, _ := getFile(messages_file)
@@ -1613,11 +1620,7 @@ func handlePortalTemplate(w http.ResponseWriter, req *http.Request) {
         C["show_code_div"] = "shown"
         C["message"] = msg.Msg(lang, "sms_sent_to") + sessions.Vs(sess_id, "phone")
         C["message_class"] = "shown"
-        if (sessions.Vi(sess_id, "sms_sent") + config.Phone_change_period) >= now {
-          C["phone_change_after_class"] = "shown_warn"
-          C["phone_change_after"] = time.Unix(sessions.Vi(sess_id, "sms_sent") + config.Phone_change_period,
-            0).Format("15:04:05")
-        }
+
         goto RENDER_PAGE
       } else {
         panic("Should not get here")
@@ -1721,6 +1724,7 @@ func handlePortalTemplate(w http.ResponseWriter, req *http.Request) {
 
 RENDER_PAGE:
 
+/*
   page_file := config.Templates_dir + "/" + config.Template + "/" + page
 
   page_src, _ := getFile(page_file)
@@ -1771,6 +1775,12 @@ RENDER_PAGE:
   if var_indexes[len(var_indexes) - 1][1] < src_len {
     result_page += page_src[var_indexes[len(var_indexes) - 1][1]:]
   }
+*/
+
+  template := config.Template
+
+  result_page, render_err := RenderPage(page, C, template, sess_info, messages, lang, msg)
+  if render_err != nil { panic(render_err) }
 
 
   once.Do(func() {
@@ -3253,4 +3263,552 @@ func mail_totp(l M) {
     fmt.Println(err.Error())
     return
   }
+}
+
+func handlePages(w http.ResponseWriter, req *http.Request) {
+  if req.Method == "OPTIONS" {
+    w.Header().Set("Access-Control-Allow-Origin", "*")
+    w.Header().Set("Access-Control-Allow-Methods", "*")
+    w.Header().Set("Access-Control-Allow-Headers", "*")
+    w.WriteHeader(http.StatusOK)
+    return
+  }
+
+  defer func() {
+    handle_error_html(recover(), w, req)
+  } ()
+
+  // find user session
+
+  remote_addr := req.RemoteAddr
+
+  ip_a := remote_addr_reg.FindStringSubmatch(remote_addr)
+  if ip_a == nil {
+    panic("bad remote addr")
+  }
+
+  user_ip := ip_a[1]
+
+  if false && config.Proxy_host != "" && config.Client_ip_header != "" {
+    if user_ip != config.Proxy_host {
+      panic("access denied for " + user_ip)
+    }
+
+    if header_values, ex := req.Header[config.Client_ip_header]; !ex || len(header_values) == 0 {
+      panic("invalid headers")
+    }
+
+    user_ip = req.Header[config.Client_ip_header][0]
+
+    if !ip_reg.MatchString(user_ip) {
+      panic("bad header value")
+    }
+  }
+
+  var C M = M{}
+
+  var template = config.Template
+  if template_reg.MatchString(req.FormValue("template")) {
+    template = req.FormValue("template")
+  }
+
+  sess_info := M{}
+
+  once := &sync.Once{}
+
+  now := time.Now().Unix()
+  now_str := fmt.Sprint(now)
+  _ = now_str
+
+  globalMutex.Lock()
+
+  defer func() {
+    once.Do(func() {
+      globalMutex.Unlock()
+    })
+  } ()
+
+
+  lang := req.FormValue("lang")
+  if lang == "" {
+    lang = config.Default_lang
+  }
+
+  messages_file := config.Templates_dir + "/" + template + "/messages.json"
+  messages_json, _ := getFile(messages_file)
+  if messages_json == "" {
+    panic("Cannot load messages file: " + messages_file)
+  }
+
+  var messages M
+  if jerr := messages.UnmarshalJSON([]byte(messages_json)); jerr != nil { panic(jerr) }
+
+  if !messages.EvM(lang) {
+    lang = "ru"
+  }
+
+  msg := Msg{&messages}
+
+  page := req.FormValue("page")
+
+  if req.FormValue("random") != "0" && req.FormValue("random") != "1" {
+    b := element.NewBuilder()
+    e := b.Ele
+    t := b.Text
+
+    w.Header().Set("Content-Type", "text/html; charset=UTF-8")
+    w.Header().Set("Cache-Control", "no-cache")
+    w.Header().Set("Access-Control-Allow-Origin", "*")
+    w.Header().Set("Access-Control-Allow-Methods", "*")
+    w.Header().Set("Access-Control-Allow-Headers", "*")
+    w.WriteHeader(http.StatusOK)
+
+    _ = b.WriteString("<!DOCTYPE html>\n")
+    e("html", "lang", "en").R(
+      e("head").R(
+        e("title").R(t(`Portal preview`)),
+        e("meta", "charset", "UTF-8"),
+        e("meta", "http-equiv", "Cache-control", "content", "no-cache"),
+        e("link", "rel", "icon", "href", "data:,"),
+      ),
+      e("body").R(
+        e("ui").R(
+          e("li").R(
+            e("a", "href", "?random=0").R(
+              t("Factory MAC"),
+            ),
+          ),
+          e("li").R( e("span").R( t(" ") ),),
+          e("li").R(
+            e("a", "href", "?random=1").R(
+              t("Random MAC"),
+            ),
+          ),
+        ),
+      ),
+    )
+    w.Write([]byte(b.String()))
+    w.Write([]byte("\n"))
+
+
+    return
+
+  }
+
+  is_random := (req.FormValue("random") == "1")
+
+  if page == "" {
+    b := element.NewBuilder()
+    e := b.Ele
+    t := b.Text
+
+    w.Header().Set("Content-Type", "text/html; charset=UTF-8")
+    w.Header().Set("Cache-Control", "no-cache")
+    w.Header().Set("Access-Control-Allow-Origin", "*")
+    w.Header().Set("Access-Control-Allow-Methods", "*")
+    w.Header().Set("Access-Control-Allow-Headers", "*")
+    w.WriteHeader(http.StatusOK)
+
+
+    rand := "&random=0"
+    if is_random { rand = "&random=1" }
+
+    href_prefix := "?template=" + template + rand
+
+    _ = b.WriteString("<!DOCTYPE html>\n")
+    e("html", "lang", "en").R(
+      e("head").R(
+        e("title").R(t(`Portal preview`)),
+        e("meta", "charset", "UTF-8"),
+        e("meta", "http-equiv", "Cache-control", "content", "no-cache"),
+        e("link", "rel", "icon", "href", "data:,"),
+      ),
+      e("body").R(
+        e("ui").R(
+          e("li").R(
+            e("a", "href", href_prefix + "&page=random").R(
+              t("random prohibited"),
+            ),
+          ),
+          e("li").R( e("span").R( t(" ") ),),
+          e("li").R(
+            e("a", "href", href_prefix + "&page=start").R(
+              t("start"),
+            ),
+          ),
+          e("li").R( e("span").R( t(" ") ),),
+          e("li").R(
+            e("a", "href", href_prefix + "&page=message").R(
+              t("message"),
+            ),
+          ),
+          e("li").R(
+            e("a", "href", href_prefix + "&page=message&state=message_error").R(
+              t("ERROR message"),
+            ),
+          ),
+          e("li").R( e("span").R( t(" ") ),),
+          e("li").R(
+            e("a", "href", href_prefix + "&page=phone").R(
+              t("phone"),
+            ),
+          ),
+          e("li").R(
+            e("a", "href", href_prefix + "&page=phone&state=phone_error").R(
+              t("phone with error"),
+            ),
+          ),
+          e("li").R(
+            e("a", "href", href_prefix + "&page=phone&state=phone_code").R(
+              t("phone, code enter"),
+            ),
+          ),
+          e("li").R(
+            e("a", "href", href_prefix + "&page=phone&state=phone_bad_code").R(
+              t("phone, bad code entered"),
+            ),
+          ),
+          e("li").R( e("span").R( t(" ") ),),
+          e("li").R(
+            e("a", "href", href_prefix + "&page=login").R(
+              t("login"),
+            ),
+          ),
+          e("li").R(
+            e("a", "href", href_prefix + "&page=login&state=login_error").R(
+              t("login error"),
+            ),
+          ),
+          e("li").R( e("span").R( t(" ") ),),
+          e("li").R(
+            e("a", "href", href_prefix + "&page=totp").R(
+              t("totp"),
+            ),
+          ),
+          e("li").R(
+            e("a", "href", href_prefix + "&page=totp&state=login_error").R(
+              t("totp error"),
+            ),
+          ),
+          e("li").R( e("span").R( t(" ") ),),
+          e("li").R(
+            e("a", "href", href_prefix + "&page=voucher").R(
+              t("voucher"),
+            ),
+          ),
+          e("li").R(
+            e("a", "href", href_prefix + "&page=voucher&state=bad_voucher").R(
+              t("bad voucher"),
+            ),
+          ),
+          e("li").R( e("span").R( t(" ") ),),
+          e("li").R(
+            e("a", "href", href_prefix + "&page=2fa").R(
+              t("2fa login"),
+            ),
+          ),
+          e("li").R(
+            e("a", "href", href_prefix + "&page=2fa&state=login_error").R(
+              t("2fa login with error"),
+            ),
+          ),
+          e("li").R(
+            e("a", "href", href_prefix + "&page=2fa&state=2fa_code").R(
+              t("2fa code enter"),
+            ),
+          ),
+          e("li").R(
+            e("a", "href", href_prefix + "&page=2fa&state=2fa_bad_code").R(
+              t("2fa bad code entered"),
+            ),
+          ),
+          e("li").R( e("span").R( t(" ") ),),
+          e("li").R(
+            e("a", "href", href_prefix + "&page=refresh").R(
+              t("refresh"),
+            ),
+          ),
+          e("li").R( e("span").R( t(" ") ),),
+          e("li").R(
+            e("a", "href", href_prefix + "&page=swap_mac").R(
+              t("Swap MAC"),
+            ),
+          ),
+          e("li").R( e("span").R( t(" ") ),),
+          e("li").R(
+            e("a", "href", href_prefix + "&page=authorized").R(
+              t("authorized"),
+            ),
+          ),
+          e("li").R( e("span").R( t(" ") ),),
+          e("li").R(
+            e("a", "href", href_prefix + "&page=disconnect").R(
+              t("disconnect"),
+            ),
+          ),
+        ),
+      ),
+    )
+    w.Write([]byte(b.String()))
+    w.Write([]byte("\n"))
+
+
+    return
+  }
+
+
+  C["message_class"] = "hidden"
+
+  C["refresh_delay"] = "9999999"
+
+  C["debug_code"] = ""
+
+  state := req.FormValue("state")
+
+  if is_random {
+    C["random"] = "shown"
+  } else {
+    C["random"] = "hidden"
+  }
+
+  switch(page) {
+  case "random":
+    page = "message"
+    C["message"] = msg.Msg(lang, "random_prohibited")
+    C["message_class"] = "shown_error"
+  case "start":
+  case "message":
+    C["message"] = msg.Msg(lang, "test_message")
+    C["message_class"] = "shown"
+    if state == "message_error" {
+      C["message_class"] = "shown_error"
+    }
+  case "voucher":
+    if state == "bad_voucher" {
+      C["message"] = msg.Msg(lang, "wrong_voucher")
+      C["message_class"] = "shown_error"
+    }
+  case "login":
+    if state == "login_error" {
+      C["message_class"] = "shown_error"
+      C["message"] = "Some login error occured"
+    }
+  case "2fa":
+    C["show_code_div"] = "hidden"
+    C["show_login_div"] = "hidden"
+
+    if state == "" {
+      C["show_login_div"] = "shown"
+    } else if state == "login_error" {
+      C["show_login_div"] = "shown"
+      C["message_class"] = "shown_error"
+      C["message"] = "Some login error occured"
+    } else if state == "2fa_code" {
+      C["show_code_div"] = "shown"
+      C["message_class"] = "shown"
+      C["message"] = msg.Msg(lang, "sms_sent_to") + "9999999999"
+    } else if state == "2fa_code_warn" {
+      C["show_code_div"] = "shown"
+      C["message_class"] = "shown"
+      C["message"] = msg.Msg(lang, "sms_sent_to") + "9999999999"
+      C["phone_change_after_class"] = "shown_warn"
+      C["phone_change_after"] = time.Now().Format("15:04:05")
+    } else if state == "2fa_bad_code" {
+      C["show_code_div"] = "shown"
+      C["message_class"] = "shown_error"
+      C["message"] = msg.Msg(lang, "wrong_code")
+    }
+  case "totp":
+    if state == "login_error" {
+      C["message_class"] = "shown_error"
+      C["message"] = "Some TOTP error occured"
+    }
+  case "phone":
+    C["show_phone_div"] = "hidden"
+    C["show_code_div"] = "hidden"
+
+    if state == "" {
+      C["show_phone_div"] = "shown"
+    } else if state == "phone_error" {
+      C["show_phone_div"] = "shown"
+      C["message"] = msg.Msg(lang, "too_many_devices_per_number")
+      C["message_class"] = "shown_error"
+    } else if state == "phone_code" {
+      C["show_code_div"] = "shown"
+      C["message"] = msg.Msg(lang, "sms_sent_to") + "9999999999"
+      C["message_class"] = "shown"
+    } else if state == "phone_bad_code" {
+      C["show_code_div"] = "shown"
+      C["message"] = msg.Msg(lang, "wrong_code")
+      C["message_class"] = "shown_error"
+    }
+
+  case "authorized":
+    C["message"] = msg.Msg(lang, "authorized_wait")
+    C["message_class"] = "shown"
+  case "disconnect":
+    C["message"] = msg.Msg(lang, "disconnect_soon")
+    C["message_class"] = "shown"
+  case "refresh":
+    C["message"] = msg.Msg(lang, "sms_in_progress")
+    C["message_class"] = "shown"
+  case "swap_mac":
+    {
+      b := element.NewBuilder()
+      e := b.Ele
+      t := b.Text
+
+      dev_mac := "0001-0203-0405"
+      i := 0
+      vendor := "Izhevsk Dynamics Inc"
+      vendor_class := msg.Msg(lang, "factory_mac_class")
+
+      e("div", "class", "mac_row").R(
+        e("div", "class", "mac_radio_row").R(
+          e("input", "type", "radio", "name", "swap_mac", "value", dev_mac, "id", "mac_" + fmt.Sprint(i)),
+          e("label", "class", "mac_label", "for", "mac_" + fmt.Sprint(i)).R(
+            t(dev_mac),
+          ),
+        ),
+        e("div", "class", "mac_name_row ").R(
+          t(msg.Msg(lang, "dev_name") + "Айпадик Иванова И.И."),
+        ),
+        e("div", "class", "mac_vendor_row " + vendor_class).R( t(vendor) ),
+        e("div", "class", "mac_added_row ").R(
+          t(msg.Msg(lang, "added") +
+            time.Unix( 1761538927, 0 ).Format(time.DateTime),
+          ),
+        ),
+        e("div", "class", "mac_last_use_row ").R(
+          t(msg.Msg(lang, "last_use") +
+            time.Unix( 1761538927 + 3601, 0 ).Format(time.DateTime),
+          ),
+        ),
+      )
+
+      dev_mac = "0203-0405-0607"
+      i = 1
+      vendor = msg.Msg(lang, "random_mac")
+      vendor_class = msg.Msg(lang, "random_mac_class")
+
+      e("div", "class", "mac_row").R(
+        e("div", "class", "mac_radio_row").R(
+          e("input", "type", "radio", "name", "swap_mac", "value", dev_mac, "id", "mac_" + fmt.Sprint(i)),
+          e("label", "class", "mac_label", "for", "mac_" + fmt.Sprint(i)).R(
+            t(dev_mac),
+          ),
+        ),
+        e("div", "class", "mac_name_row ").R(
+          t(msg.Msg(lang, "dev_name") + "Робот Иванова И.И."),
+        ),
+        e("div", "class", "mac_vendor_row " + vendor_class).R( t(vendor) ),
+        e("div", "class", "mac_added_row ").R(
+          t(msg.Msg(lang, "added") +
+            time.Unix( 1761539927, 0 ).Format(time.DateTime),
+          ),
+        ),
+        e("div", "class", "mac_last_use_row ").R(
+          t(msg.Msg(lang, "last_use") +
+            time.Unix( 1761539927 + 3601, 0 ).Format(time.DateTime),
+          ),
+        ),
+      )
+
+      C["macs_list"] = b.String()
+
+    }
+  default:
+    page = "message"
+    C["message"] = "Unknown page"
+    C["message_class"] = "shown_error"
+  }
+
+  result_page, render_err := RenderPage(page, C, template, sess_info, messages, lang, msg)
+  if render_err != nil { panic(render_err) }
+
+  once.Do(func() {
+    globalMutex.Unlock()
+  })
+
+  w.Header().Set("Content-Type", "text/html; charset=UTF-8")
+  w.Header().Set("Cache-Control", "no-cache")
+  w.Header().Set("Access-Control-Allow-Origin", "*")
+  w.Header().Set("Access-Control-Allow-Methods", "*")
+  w.Header().Set("Access-Control-Allow-Headers", "*")
+
+  //w.WriteHeader(http.StatusOK)
+
+  w.Write([]byte(result_page))
+
+  //fmt.Println(req)
+}
+
+func RenderPage(page string, C M, template string, sess_info M, messages M, lang string, msg Msg) (ret string, ret_err error) {
+  defer func() {
+    if r := recover(); r != nil {
+      ret = ""
+      switch v := r.(type) {
+      case string:
+        ret_err = errors.New(v)
+      case error:
+        ret_err = v
+      default:
+        ret_err = errors.New("RenderPage unknown error")
+      }
+    }
+  } ()
+
+  page_file := config.Templates_dir + "/" + template + "/" + page
+
+  page_src, _ := getFile(page_file)
+  if page_src == "" {
+    panic("Cannot load page file \"" + page_file + "\"")
+  }
+
+  var_indexes := page_split_reg.FindAllStringIndex(page_src, -1)
+
+  prev_start := 0
+
+  result_page := ""
+
+  src_len := len(page_src)
+
+  for _, a := range var_indexes {
+    if a[0] > prev_start {
+      result_page += page_src[prev_start:a[0]]
+    }
+    prev_start = a[1]
+
+    var_name := page_src[a[0]+1:a[1]-1]
+
+    if strings.HasPrefix(var_name, "F_") && len(var_name) > 2 {
+      file_name := config.Templates_dir + "/" + template + "/" + var_name[2:]
+      file_cont, ferr := getFile(file_name)
+      if ferr != nil { panic(ferr) }
+      result_page += file_cont
+    } else if var_name == "S_" {
+      result_page += "const sess_info = " + sess_info.ToJsonStr(true) + ";\n"
+    } else if strings.HasPrefix(var_name, "C_") && len(var_name) > 2 {
+      if C.Evs(var_name[2:]) {
+        result_page += C.Vs(var_name[2:])
+      } else {
+        result_page += "unknown_C_" + var_name[2:]
+      }
+    } else {
+      if messages.Evs(lang, var_name) {
+        result_page += msg.Msg(lang, var_name)
+      } else if messages.Evs(config.Default_lang, var_name) {
+        result_page += msg.Msg(config.Default_lang, var_name)
+      } else {
+        result_page += "unknown_" + var_name
+      }
+    }
+  }
+
+  if var_indexes[len(var_indexes) - 1][1] < src_len {
+    result_page += page_src[var_indexes[len(var_indexes) - 1][1]:]
+  }
+
+  return result_page, nil
+
 }
