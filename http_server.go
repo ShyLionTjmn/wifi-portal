@@ -3289,7 +3289,7 @@ func handlePages(w http.ResponseWriter, req *http.Request) {
 
   user_ip := ip_a[1]
 
-  if false && config.Proxy_host != "" && config.Client_ip_header != "" {
+  if config.Proxy_host != "" && config.Client_ip_header != "" {
     if user_ip != config.Proxy_host {
       panic("access denied for " + user_ip)
     }
