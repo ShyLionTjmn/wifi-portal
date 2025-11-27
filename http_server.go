@@ -595,6 +595,12 @@ func handlePortalTemplate(w http.ResponseWriter, req *http.Request) {
   var auth_method string
   req_auth_method := req.FormValue("auth_method")
 
+  if req_auth_method == "sms" && config.Allow_sms != 1 { panic("Auth method not allowed") }
+  if req_auth_method == "voucher" && config.Allow_voucher != 1 { panic("Auth method not allowed") }
+  if req_auth_method == "login" && config.Allow_login != 1 { panic("Auth method not allowed") }
+  if req_auth_method == "2fa" && config.Allow_2fa != 1 { panic("Auth method not allowed") }
+  if req_auth_method == "totp" && config.Allow_totp != 1 { panic("Auth method not allowed") }
+
   if req_auth_method == "reset" {
 
     if auth_cache.EvM(sta_id) {
