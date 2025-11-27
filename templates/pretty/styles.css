@@ -4,7 +4,7 @@
 }
 
 header {
-  background-color: #003594;
+  background-color: rgb(128,128,128);
   display: flex;
   justify-content: space-between;
   padding: 22px 88px;
@@ -76,7 +76,7 @@ body {
 }
 .random_head {
   font-size: 14px;
-  margin: 42px 0;
+  margin: 10px 0;
 }
 .random_head {
   width: 368px;
@@ -99,7 +99,7 @@ body {
   margin-bottom: 42px;
 }
 .random_head +.random_body {
-  margin-top: -42px
+  margin-top: -10px
 }
 
 .shown_error {
@@ -109,7 +109,7 @@ body {
   color: darkblue;
 }
 .auth_reset_div input[type="submit"] {
-  color: #003594;
+  color: darkblue;
   background: none;
   border: none;
   cursor: pointer;
@@ -164,7 +164,8 @@ body {
 .auth_method a {
   font-size: 16px;
   line-height: 24px;
-  color: #003594;
+  /* color: #003594; */
+  color: darkblue;
   display: block;
   height: 100%;
   width: 100%;

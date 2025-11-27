@@ -27,11 +27,11 @@
   <DIV id="random_body" class="random_body">%random_body%</DIV>
   <DIV>%select_auth_method%</DIV>
   <DIV>
-    <!-- DIV><H2><A href="?auth_method=sms">SMS</A></H2></DIV -->
-    <DIV><H2><A href="?auth_method=voucher">Voucher</A></H2></DIV>
-    <DIV><H2><A href="?auth_method=login">Domain login</A></H2></DIV>
-    <!-- DIV><H2><A href="?auth_method=2fa">Domain login (2FA)</A></H2></DIV -->
-    <DIV><H2><A href="?auth_method=totp">TOTP</A></H2></DIV>
+    <DIV class="%C_allow_sms_class%"><H2><A href="?auth_method=sms">SMS</A></H2></DIV>
+    <DIV class="%C_allow_voucher_class%"><H2><A href="?auth_method=voucher">Voucher</A></H2></DIV>
+    <DIV class="%C_allow_login_class%"><H2><A href="?auth_method=login">Domain login</A></H2></DIV>
+    <DIV class="%C_allow_2fa_class%"><H2><A href="?auth_method=2fa">Domain login (2FA)</A></H2></DIV>
+    <DIV class="%C_allow_totp_class%"><H2><A href="?auth_method=totp">TOTP</A></H2></DIV>
   </DIV>
   <DIV class="auth_reset_div">
     <FORM method="post" action="?">
