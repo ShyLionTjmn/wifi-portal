@@ -5,6 +5,7 @@ import (
   "log"
   "time"
   "flag"
+  "strings"
   "os"
   "sync"
   "syscall"
@@ -141,9 +142,15 @@ func main() {
     var red redis.Conn
     var rerr error
 
+    red_wait_start := time.Now().Unix()
+
     red, rerr = RedisCheck(red, "unix", config.Redis_socket, config.Redis_db)
-    //for rerr != nil && strings.Contains(rerr.Error(), "LOADING Redis is loading the dataset in memory") {
-    //}
+
+    for rerr != nil && strings.Contains(rerr.Error(), "LOADING Redis is loading the dataset in memory") {
+      if time.Now().Unix() > (red_wait_start + int64(config.Redis_wait)) { break }
+      time.Sleep(time.Second)
+      red, rerr = RedisCheck(red, "unix", config.Redis_socket, config.Redis_db)
+    }
 
     if rerr != nil { log.Fatal(rerr.Error()) }
 

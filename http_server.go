@@ -1720,62 +1720,15 @@ func handlePortalTemplate(w http.ResponseWriter, req *http.Request) {
 
   } else {
     page = "start"
+
+    if config.Allow_sms != 1 { C["allow_sms_class"] = "hidden" } else { C["allow_sms_class"] = "" }
+    if config.Allow_login != 1 { C["allow_login_class"] = "hidden" } else { C["allow_login_class"] = "" }
+    if config.Allow_voucher != 1 { C["allow_voucher_class"] = "hidden" } else { C["allow_voucher_class"] = "" }
+    if config.Allow_2fa != 1 { C["allow_2fa_class"] = "hidden" } else { C["allow_2fa_class"] = "" }
+    if config.Allow_totp != 1 { C["allow_totp_class"] = "hidden" } else { C["allow_totp_class"] = "" }
   }
 
 RENDER_PAGE:
-
-/*
-  page_file := config.Templates_dir + "/" + config.Template + "/" + page
-
-  page_src, _ := getFile(page_file)
-  if page_src == "" {
-    panic("Cannot load page file \"" + page_file + "\"")
-  }
-
-  var_indexes := page_split_reg.FindAllStringIndex(page_src, -1)
-
-  prev_start := 0
-
-  result_page := ""
-
-  src_len := len(page_src)
-
-  for _, a := range var_indexes {
-    if a[0] > prev_start {
-      result_page += page_src[prev_start:a[0]]
-    }
-    prev_start = a[1]
-
-    var_name := page_src[a[0]+1:a[1]-1]
-
-    if strings.HasPrefix(var_name, "F_") && len(var_name) > 2 {
-      file_name := config.Templates_dir + "/" + config.Template + "/" + var_name[2:]
-      file_cont, ferr := getFile(file_name)
-      if ferr != nil { panic(ferr) }
-      result_page += file_cont
-    } else if var_name == "S_" {
-      result_page += "const sess_info = " + sess_info.ToJsonStr(true) + ";\n"
-    } else if strings.HasPrefix(var_name, "C_") && len(var_name) > 2 {
-      if C.Evs(var_name[2:]) {
-        result_page += C.Vs(var_name[2:])
-      } else {
-        result_page += "unknown_C_" + var_name[2:]
-      }
-    } else {
-      if messages.Evs(lang, var_name) {
-        result_page += msg.Msg(lang, var_name)
-      } else if messages.Evs(config.Default_lang, var_name) {
-        result_page += msg.Msg(config.Default_lang, var_name)
-      } else {
-        result_page += "unknown_" + var_name
-      }
-    }
-  }
-
-  if var_indexes[len(var_indexes) - 1][1] < src_len {
-    result_page += page_src[var_indexes[len(var_indexes) - 1][1]:]
-  }
-*/
 
   template := config.Template
 
@@ -3577,6 +3530,11 @@ func handlePages(w http.ResponseWriter, req *http.Request) {
     C["message"] = msg.Msg(lang, "random_prohibited")
     C["message_class"] = "shown_error"
   case "start":
+    if config.Allow_sms != 1 { C["allow_sms_class"] = "hidden" } else { C["allow_sms_class"] = "" }
+    if config.Allow_login != 1 { C["allow_login_class"] = "hidden" } else { C["allow_login_class"] = "" }
+    if config.Allow_voucher != 1 { C["allow_voucher_class"] = "hidden" } else { C["allow_voucher_class"] = "" }
+    if config.Allow_2fa != 1 { C["allow_2fa_class"] = "hidden" } else { C["allow_2fa_class"] = "" }
+    if config.Allow_totp != 1 { C["allow_totp_class"] = "hidden" } else { C["allow_totp_class"] = "" }
   case "message":
     C["message"] = msg.Msg(lang, "test_message")
     C["message_class"] = "shown"

@@ -7,10 +7,12 @@ import (
   "flag"
 )
 
-const DEFAULT_REDIS_SOCKET="/tmp/redis.sock"
-const DEFAULT_REDIS_DB="0"
-const DEFAULT_REDIS_ERR_SLEEP=5
-const DEFAULT_REDIS_PREFIX="wifi_portal."
+const DEFAULT_REDIS_SOCKET = "/tmp/redis.sock"
+const DEFAULT_REDIS_DB = "0"
+const DEFAULT_REDIS_ERR_SLEEP = 5
+const DEFAULT_REDIS_PREFIX = "wifi_portal."
+
+const DEFAULT_Redis_wait = 60
 
 const DEFAULT_WWW_PORT = 8002
 const DEFAULT_WWW_ROOT = "/opt/wifi_portal/www/"
@@ -60,7 +62,7 @@ const DEFAULT_Ldap_dn_regexp = `.*`
 const DEFAULT_MAX_LOGIN_FAILURES = 3
 // const DEFAULT_LOGIN_LOCKOUT_TIME = 300 //seconds // WHY have it at all?
 
-const DEFAULT_STALE_SESSION_AGE = 60*60*24 //seconds
+const DEFAULT_STALE_SESSION_AGE = DEFAULT_INTERIM_UPDATE_PERIOD*5 //seconds
 
 const DEFAULT_CLIENT_IP_HEADER = "X-Forwarded-For"
 
@@ -90,6 +92,12 @@ const DEFAULT_Unifi_max_redir_age = 60
 const DEFAULT_Totp_issuer = "My Corp WiFi"
 
 const DEFAULT_Mail_port = 25
+
+const DEFAULT_Allow_sms = 1
+const DEFAULT_Allow_login = 1
+const DEFAULT_Allow_voucher = 1
+const DEFAULT_Allow_2fa = 1
+const DEFAULT_Allow_totp = 1
 
 type Unifi_Controller struct {
   Host				string
@@ -122,6 +130,7 @@ type Config struct {
   Redis_db                      string
   Redis_err_sleep               uint
   Redis_prefix                  string
+  Redis_wait                    uint64
 
   Www_port                      uint
   Www_root                      string
@@ -231,6 +240,12 @@ type Config struct {
 
   Totp_issuer                   string
 
+  Allow_sms                     int64
+  Allow_login                   int64
+  Allow_voucher                 int64
+  Allow_2fa                     int64
+  Allow_totp                    int64
+
   Config_origin                 string
 }
 
@@ -242,6 +257,7 @@ func LoadConfig(file string, from_opt_c bool) Config {
     Redis_db:                      DEFAULT_REDIS_DB,
     Redis_err_sleep:               DEFAULT_REDIS_ERR_SLEEP,
     Redis_prefix:                  DEFAULT_REDIS_PREFIX,
+    Redis_wait:                    DEFAULT_Redis_wait,
 
     Www_port:                      DEFAULT_WWW_PORT,
     Www_root:                      DEFAULT_WWW_ROOT,
@@ -318,6 +334,12 @@ func LoadConfig(file string, from_opt_c bool) Config {
     Totp_issuer:                   DEFAULT_Totp_issuer,
 
     Mail_port:                     DEFAULT_Mail_port,
+
+    Allow_sms:                     DEFAULT_Allow_sms,
+    Allow_login:                   DEFAULT_Allow_login,
+    Allow_voucher:                 DEFAULT_Allow_voucher,
+    Allow_2fa:                     DEFAULT_Allow_2fa,
+    Allow_totp:                    DEFAULT_Allow_totp,
 
     Config_origin:                 "Default values",
   }

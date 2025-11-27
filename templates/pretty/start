@@ -38,11 +38,11 @@
     <DIV class="select_auth_method_text">%select_auth_method%</DIV>
     <NAV class="auth_methods_container">
       <UL class="auth_methods">
-        <!-- LI class="auth_method"><A href="?auth_method=sms">SMS</A></LI -->
-        <LI class="auth_method"><A href="?auth_method=voucher">Voucher</A></LI>
-        <LI class="auth_method"><A href="?auth_method=login">Domain login</A></LI>
-        <!-- LI class="auth_method"><A href="?auth_method=2fa">Domain login (2FA)</A></LI -->
-        <LI class="auth_method"><A href="?auth_method=totp">TOTP</A></LI>
+        <LI class="auth_method %C_allow_sms_class%"><A href="?auth_method=sms">SMS</A></LI>
+        <LI class="auth_method %C_allow_voucher_class%"><A href="?auth_method=voucher">Voucher</A></LI>
+        <LI class="auth_method %C_allow_login_class%"><A href="?auth_method=login">Domain login</A></LI>
+        <LI class="auth_method %C_allow_2fa_class%"><A href="?auth_method=2fa">Domain login (2FA)</A></LI>
+        <LI class="auth_method %C_allow_totp_class%"><A href="?auth_method=totp">TOTP</A></LI>
       </UL>
     </NAV>
 
