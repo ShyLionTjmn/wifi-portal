@@ -147,7 +147,9 @@ func main() {
     red, rerr = RedisCheck(red, "unix", config.Redis_socket, config.Redis_db)
 
     for rerr != nil && strings.Contains(rerr.Error(), "LOADING Redis is loading the dataset in memory") {
-      if time.Now().Unix() > (red_wait_start + int64(config.Redis_wait)) { break }
+      now := time.Now().Unix()
+      if now > (red_wait_start + int64(config.Redis_wait)) { break }
+      fmt.Println("Waiting for redis startup: ", (red_wait_start + int64(config.Redis_wait)) - now, " seconds to fail")
       time.Sleep(time.Second)
       red, rerr = RedisCheck(red, "unix", config.Redis_socket, config.Redis_db)
     }
