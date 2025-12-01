@@ -720,87 +720,86 @@ func coa_server(stop chan string, wg *sync.WaitGroup) {
         "action": coa.action,
         "session": coa.session,
       })
-  
+
       if coa.session.Evs("unifi") {
         unifi_controller := coa.session.Vs("unifi_controller")
-	if config.Unifis != nil {
+	      if config.Unifis != nil {
           if _, ex := config.Unifis[unifi_controller]; ex {
 
-	    if _, ex := unifis[unifi_controller]; !ex {
-	      cj, _ := cookiejar.New(nil)
-	      tr := &http.Transport{
+	          if _, ex := unifis[unifi_controller]; !ex {
+	            cj, _ := cookiejar.New(nil)
+	            tr := &http.Transport{
                 TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
               }
 
-	      unifis[unifi_controller] = &http.Client {
+	            unifis[unifi_controller] = &http.Client {
                 Timeout: 5*time.Second,
                 Transport: tr,
                 Jar: cj,
               }
 
-	      uerr := UnifiLogin(unifis[unifi_controller], unifi_controller)
-	      if uerr != nil {
-		fmt.Println(now_debug + "Error: ", uerr.Error())
-		unifis[unifi_controller] = nil
-		continue
-	      }
-	    } else {
-	      if unifis[unifi_controller] == nil {
-		continue
-	      }
-	    }
+	            uerr := UnifiLogin(unifis[unifi_controller], unifi_controller)
+	            if uerr != nil {
+		            fmt.Println(now_debug + "Error: ", uerr.Error())
+		            unifis[unifi_controller] = nil
+		            continue
+	            }
+	          } else {
+	            if unifis[unifi_controller] == nil {
+		            continue
+	            }
+	          }
 
-	    post_data := M{
-	      "mac": coa.session.Vs("unifi_mac"),
-	    }
+	          post_data := M{
+	            "mac": coa.session.Vs("unifi_mac"),
+	          }
 
-	    post_uri := "/api/s/" + coa.session.Vs("unifi_site") + "/cmd/stamgr"
+	          post_uri := "/api/s/" + coa.session.Vs("unifi_site") + "/cmd/stamgr"
 
-	    var perr error
+	          var perr error
 
-	    if coa.action == "drop" {
+	          if coa.action == "drop" {
               post_data["cmd"] = "unauthorize-guest"
 
-	      _, perr = UnifiPost(unifis[unifi_controller], unifi_controller, post_uri, post_data)
-	      if perr != nil {
-		fmt.Println(now_debug + "Error: unauthorize-guest:", perr.Error())
+	            _, perr = UnifiPost(unifis[unifi_controller], unifi_controller, post_uri, post_data)
+	            if perr != nil {
+		            fmt.Println(now_debug + "Error: unauthorize-guest:", perr.Error())
               } else {
-	        post_data["cmd"] = "kick-sta"
-		_, perr = UnifiPost(unifis[unifi_controller], unifi_controller, post_uri, post_data)
-		if perr != nil && perr.Error() == "UniFi error: api.err.UnknownStation" {
-		  perr = nil
-		}
-		if perr != nil { fmt.Println(now_debug + "Error: kick-sta:", perr.Error()) }
-	      }
-                
-	    } else {
-	      if coa.session.Vs("next_state") == "run" {
-		post_data["cmd"] = "authorize-guest"
-	      } else {
-		post_data["cmd"] = "unauthorize-guest"
-	      }
-	      _, perr = UnifiPost(unifis[unifi_controller], unifi_controller, post_uri, post_data)
+	              post_data["cmd"] = "kick-sta"
+		            _, perr = UnifiPost(unifis[unifi_controller], unifi_controller, post_uri, post_data)
+		            if perr != nil && perr.Error() == "UniFi error: api.err.UnknownStation" {
+		              perr = nil
+		            }
+		            if perr != nil { fmt.Println(now_debug + "Error: kick-sta:", perr.Error()) }
+	            }
+	          } else {
+	            if coa.session.Vs("next_state") == "run" {
+		            post_data["cmd"] = "authorize-guest"
+	            } else {
+		            post_data["cmd"] = "unauthorize-guest"
+	            }
+	            _, perr = UnifiPost(unifis[unifi_controller], unifi_controller, post_uri, post_data)
               if perr != nil { fmt.Println(now_debug + "Error: ", perr.Error()) }
-	    }
+	          }
 
 
-	    if perr == nil {
+	          if perr == nil {
 
               globalMutex.Lock()
               if sessions.EvM(coa.sess_id) {
                 sessions.VM(coa.sess_id)["coa_sent_state"] = coa.action
               }
 
-	      if coa.action == "drop" {
-		delete(sessions, coa.sess_id)
-	      }
+	            if coa.action == "drop" {
+		            delete(sessions, coa.sess_id)
+	            }
               globalMutex.Unlock()
-	    }
-	  }
-	}
+	          }
+	        }
+	      }
       } else { // not unifi
         nas_id := coa.session.Vs("nas_id")
-  
+
         if client, ex := clients[nas_id]; ex {
           var request *radius.Packet
           if coa.action == "drop" {
@@ -810,10 +809,10 @@ func coa_server(stop chan string, wg *sync.WaitGroup) {
             request.AddVSA( dict.NewVSA("Huawei", "Huawei-Ext-Specific", "user-command=1") )
           }
           request.AddAVP( radius.AVP{Type: radius.AcctSessionId, Value: []byte(coa.sess_id)} )
-  
+
           reply, err := client.Send(request)
           _ = reply
-  
+
           if err != nil {
               fmt.Println(now_debug + "Error: ", err.Error())
           } else {

@@ -592,6 +592,12 @@ func handlePortalTemplate(w http.ResponseWriter, req *http.Request) {
 
   msg := Msg{&messages}
 
+  if config.Prohibit_random != 0 {
+    C["random_body"] = msg.Msg(lang, "random_body_prohibited")
+  } else {
+    C["random_body"] = msg.Msg(lang, "random_body")
+  }
+
   var auth_method string
   req_auth_method := req.FormValue("auth_method")
 
@@ -695,8 +701,17 @@ func handlePortalTemplate(w http.ResponseWriter, req *http.Request) {
         }
       }
     }
+
+    if !dev_in_list && config.Prohibit_random != 0 && is_random {
+      C["message"] = msg.Msg(lang, "random_prohibited")
+      C["message_class"] = "shown_error"
+      page = "message"
+      goto RENDER_PAGE
+    }
+
     if dev_in_list || devs_count < devs_allowed {
       if !dev_in_list {
+
         if !login_devices.EvM(login) { login_devices[login] = M{} }
         if !login_devices.EvM(login, "devs") { login_devices.VM(login)["devs"] = M{} }
         if !login_devices.EvM(login, "devs", sta_id) {
@@ -1677,6 +1692,15 @@ func handlePortalTemplate(w http.ResponseWriter, req *http.Request) {
         return
       }
 
+      if (!vouchers.Evs(voucher, "mac") || vouchers.Vs(voucher, "mac") == "") &&
+         config.Prohibit_random != 0 && is_random &&
+      true {
+        page = "message"
+        C["message"] = msg.Msg(lang, "random_prohibited")
+        C["message_class"] = "shown_error"
+        goto RENDER_PAGE
+      }
+
       vouchers.VM(voucher)["mac"] = sta_id
       vouchers.VM(voucher)["last_portal_logon"] = now
       if !vouchers.Evi(voucher, "activated") {
@@ -1713,6 +1737,13 @@ func handlePortalTemplate(w http.ResponseWriter, req *http.Request) {
         "sta_id": sta_id,
         "session": sessions.VM(sess_id).Copy(),
       })
+      goto RENDER_PAGE
+    }
+
+    if config.Prohibit_random != 0 && is_random {
+      page = "message"
+      C["message"] = msg.Msg(lang, "random_prohibited")
+      C["message_class"] = "shown_error"
       goto RENDER_PAGE
     }
 

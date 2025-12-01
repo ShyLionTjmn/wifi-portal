@@ -99,6 +99,8 @@ const DEFAULT_Allow_voucher = 1
 const DEFAULT_Allow_2fa = 1
 const DEFAULT_Allow_totp = 1
 
+const DEFAULT_Prohibit_random = 0
+
 type Unifi_Controller struct {
   Host				string
   Login				string
@@ -246,6 +248,8 @@ type Config struct {
   Allow_2fa                     int64
   Allow_totp                    int64
 
+  Prohibit_random               int64
+
   Config_origin                 string
 }
 
@@ -340,6 +344,8 @@ func LoadConfig(file string, from_opt_c bool) Config {
     Allow_voucher:                 DEFAULT_Allow_voucher,
     Allow_2fa:                     DEFAULT_Allow_2fa,
     Allow_totp:                    DEFAULT_Allow_totp,
+
+    Prohibit_random:               DEFAULT_Prohibit_random,
 
     Config_origin:                 "Default values",
   }

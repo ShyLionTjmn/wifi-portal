@@ -17,7 +17,7 @@
 %F_scripts.js%
   </SCRIPT>
 
-  <!-- session info in form of const sess_info={...}; -->
+  <!-- session info in form of var sess_info={...} -->
   <SCRIPT type="text/javascript">
 %S_%
   </SCRIPT>
@@ -26,25 +26,7 @@
 %F_header.html%
   <MAIN class="page">
     <H2 class="welcome_text">%welcome%</H2>
-    <DIV class="random_head %C_random%" onclick="toggle('random_body');">
-      %F_i.svg%
-      %random_head%
-      %F_arrow_down.svg%
-    </DIV>
-    <DIV id="random_body" class="random_body">%C_random_body%</DIV>
-    
-    <DIV>%swap_mac%</DIV>
-    <DIV class="form_div">
-      <FORM method="post" action="?">
-        <DIV class="mac_list_div">
-          %C_macs_list%
-        </DIV>
-        <DIV class="mac_submit_div">
-          <INPUT type="submit" value="%confirm%"/>
-        </DIV>
-      </FORM>
-    </DIV>
-    
+    <DIV class="%C_message_class%">%C_message%</DIV>
     <DIV class="auth_reset_div">
       <FORM method="post" action="?">
         <INPUT type="submit" name="auth_reset" value="%auth_reset%"/>
