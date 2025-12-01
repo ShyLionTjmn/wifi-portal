@@ -3387,6 +3387,12 @@ func handlePages(w http.ResponseWriter, req *http.Request) {
 
   is_random := (req.FormValue("random") == "1")
 
+  if config.Prohibit_random != 0 {
+    C["random_body"] = msg.Msg(lang, "random_body_prohibited")
+  } else {
+    C["random_body"] = msg.Msg(lang, "random_body")
+  }
+
   if page == "" {
     b := element.NewBuilder()
     e := b.Ele
