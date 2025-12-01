@@ -1,1 +1,1 @@
-Wifi portal for Huawei
+Wifi portal for Huawei and Ubiquity UniFi
