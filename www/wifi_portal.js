@@ -228,6 +228,16 @@ $( document ).ready(function() {
       ;
     };
 
+    if(userinfo["is_login_admin"]) {
+      menu
+       .append( $(SPAN).addClass("bigbutton").text("IoT")
+         .click( function() {
+           window.location = "?action=iot"+(DEBUG?"&debug":"");
+         })
+       )
+      ;
+    };
+
     menu
      .append( $(SPAN).addClass("bigbutton").text("Личный кабинет")
        .click( function() {
@@ -257,6 +267,9 @@ $( document ).ready(function() {
       break;
     case "mypage":
       actionMyPage();
+      break;
+    case "iot":
+      actionIoT();
       break;
     };
 
@@ -2394,4 +2407,134 @@ function actionMyPage() {
      .appendTo(workarea)
     ;
   };
+};
+
+function actionIoT() {
+  workarea.empty();
+  fixed_div.empty();
+
+  let table = $(TABLE)
+   .append( $(THEAD)
+     .append( $(TR)
+       .append( $(TH).text("") )
+       .append( $(TH).text("MAC") )
+       .append( $(TH).text("") ) // macs for search, invisible
+       .append( $(TH).text("Состояние") )
+       .append( $(TH).text("Описание") )
+     )
+   )
+   .appendTo(workarea)
+  ;
+
+  let tbody = $(TBODY).appendTo(table);
+
+  let dt = table.DataTable({
+    columns: [
+      { searchable: false },
+      { searchable: false },
+      { visible: false },
+      null,
+      null
+    ],
+    order: [
+      [ 1, 'asc' ]
+    ],
+    pageLength: 25
+  });
+
+  run_query({"action": "list_iots"}, function(res) {
+    for(let i in res["ok"]["iots"]) {
+      let row_data = res["ok"]["iots"][i];
+
+      let tr = iot_row(row_data);
+
+      dt.row.add(tr);
+    };
+
+    dt.draw();
+  });
+};
+
+function iot_row(row_data) {
+  let mac_search = "";
+
+  for(let mfi in mac_formats) {
+    mac_search += " " + format_mac(row_data['mac'], mac_formats[mfi]);
+  };
+
+
+  let tr = $(TR)
+   .data("data", row_data)
+   .append( $(TD)
+     .append( $(LABEL)
+       .addClass(["button", "ui-icon", "ui-icon-edit"])
+       .addClass("edit_btn")
+       .click(function() {
+         let tr = $(this).closest("TR");
+         let table = tr.closest("TABLE");
+         let dt = table.DataTable();
+         let row = dt.row(tr);
+
+         let row_data = tr.data("data");
+
+         if(row.child.isShown()) {
+           row.child.hide();
+           return;
+         };
+
+         let child_div = $(DIV)
+          .addClass("child")
+          .addClass("iot_edit")
+          .data("tr", tr)
+         ;
+
+
+         let levels = keys(const_access_levels);
+
+         levels.sort();
+
+         let auth_level_sel = $(SELECT);
+
+
+         for(let li in levels) {
+           let access_level = levels[li];
+
+           auth_level_sel
+            .append( $(OPTION)
+              .val(access_level)
+              .text(const_access_levels[access_level]["Name"])
+            )
+           ;
+         };
+
+         auth_level_sel.val(row_data['level']);
+
+         let last_logon = "";
+         if(row_data["last_connect"] !== undefined) {
+           last_logon = from_unix_time(row_data["devs"]["devs"][mac]["last_logon"]);
+         };
+
+         child_div
+          .append( $(SPAN).text(mac)
+            .title( row_data["devs"]["devs"][mac]["vendor"] )
+          )
+          .append( auth_level_sel )
+          .append( $(SPAN).text(last_logon) )
+         ;
+
+         row.child( child_div ).show();
+       })
+     )
+   )
+   .append( $(TD).text(row_data["mac"]) )
+   .append( $(TD).addClass("mac_search").text(mac_search) )
+   .append( $(TD).addClass("iot_status").text("") )
+   .append( $(TD).addClass("iot_descr").text("") )
+  ;
+
+  if(row_data["disabled"] === 1) {
+    tr.addClass("disabled_user");
+  };
+
+  return tr;
 };

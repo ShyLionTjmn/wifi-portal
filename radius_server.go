@@ -44,7 +44,7 @@ func radius_server(stop chan string, wg *sync.WaitGroup) {
   }()
 
   s = radius.NewServer(config.Radius_listen, config.Radius_secret, radiusService{})
-
+/*
   clients := []radius.Client{}
 
   for _, cl := range config.Clients {
@@ -52,7 +52,7 @@ func radius_server(stop chan string, wg *sync.WaitGroup) {
   }
 
   s.WithClientList(radius.NewClientList(clients))
-
+*/
   err := s.ListenAndServe()
 
   if err != nil {
@@ -71,11 +71,20 @@ func (p radiusService) RadiusHandle(request *radius.Packet) (npac *radius.Packet
   now := now_t.Unix()
 
   // a pretty print of the request.
-  //fmt.Println("Request: ", request)
+  fmt.Println("Request: ", request)
 
   defer func() {
-    //fmt.Println("Answer: ", npac)
+    fmt.Println("Answer: ", npac)
   } ()
+
+	npac = request.Reply()
+
+  if request.Code == radius.AccountingRequest &&
+     request.GetAcctStatusType() == radius.AcctStatusTypeEnumAccountingOn &&
+  true {
+    npac.Code = radius.AccountingResponse
+    return
+  }
 
   defer func() {
     if r := recover(); r != nil {
@@ -120,11 +129,9 @@ func (p radiusService) RadiusHandle(request *radius.Packet) (npac *radius.Packet
   globalMutex.Lock()
   defer globalMutex.Unlock()
 
+
   now_debug := now_t.Format(time.DateTime) + " "
   _ = now_debug
-
-	npac = request.Reply()
-
 
   var NasIdAVP = request.GetAVP(radius.NASIdentifier)
   var NasIpAVP = request.GetAVP(radius.NASIPAddress)
@@ -134,28 +141,55 @@ func (p radiusService) RadiusHandle(request *radius.Packet) (npac *radius.Packet
   var StaIpAVP = request.GetAVP(radius.FramedIPAddress)
   var SessClassAVP = request.GetAVP(radius.Class)
 
-  if NasIdAVP == nil ||
-     NasIpAVP == nil ||
-  false {
-    panic("No AcctSessionId or CallingStationId in request")
+  var nas_ip,nas_id string
+
+  if NasIdAVP == nil { panic("No NasId in request") }
+  nas_id = NasIdAVP.Decode(request).(string)
+
+  var unifi_controller string
+  var unifi_site string
+
+  if config.Unifis != nil && len(config.Unifis) > 0 {
+    for uc, _ := range config.Unifis {
+      if strings.HasPrefix(nas_id, config.Unifis[uc].NasID + "#" ) {
+        unifi_controller = uc
+        unifi_site = nas_id[len(config.Unifis[uc].NasID) + 1:]
+
+        break
+      }
+    }
   }
 
-  nas_id := NasIdAVP.Decode(request).(string)
-  nas_ip := NasIpAVP.Decode(request).(net.IP).String()
+  if len(config.Clients) != 0 {
+    if NasIpAVP == nil ||
+    false {
+      panic("No NasIp in request")
+    }
 
-  if _, ex := config.Clients[nas_id]; !ex || config.Clients[nas_id].Ip != nas_ip {
-    panic("Nas IP and Id does not match or exists")
+    nas_ip = NasIpAVP.Decode(request).(net.IP).String()
+
+    if _, ex := config.Clients[nas_id]; !ex || config.Clients[nas_id].Ip != nas_ip {
+      panic("Nas IP and Id does not match or exists")
+    }
+  } else {
+    colon_idx := strings.Index(request.ClientAddr, ":")
+    if colon_idx > 0 {
+      nas_ip = request.ClientAddr[:colon_idx]
+    } else {
+      nas_ip = request.ClientAddr
+    }
   }
 
 
-  if SessIdAVP == nil ||
-     StaIdAVP == nil ||
-  false {
-    panic("No AcctSessionId or CallingStationId in request")
-  }
+  if StaIdAVP == nil { panic("No StaId in request") }
+  sta_id := FormatMAC(StaIdAVP.Decode(request).(string))
 
-  sess_id := SessIdAVP.Decode(request).(string)
-  sta_id := StaIdAVP.Decode(request).(string)
+  var sess_id string
+  if SessIdAVP != nil {
+    sess_id = SessIdAVP.Decode(request).(string)
+  } else {
+    sess_id = sta_id + "@" + nas_id
+  }
 
   sta_ip := "0.0.0.0"
 
@@ -177,416 +211,512 @@ func (p radiusService) RadiusHandle(request *radius.Packet) (npac *radius.Packet
     secure = true
   }
 
+  iot := false
+
+  if iot_called_sid_reg != nil && CalledIdAVP != nil &&
+    iot_called_sid_reg.MatchString(called_id) &&
+  true {
+    iot = true
+  }
+
   switch request.Code {
   case radius.AccessRequest:
-
-    if secure {
-      last_login := int64(0)
-      dpsk := ""
-      dpsk_voucher := ""
-      dpsk_login := ""
-      dpsk_username := ""
-      dpsk_type := ""
-      dpsk_level := ""
-
-      for login, _ := range login_devices {
-        login_last_login := int64(0)
-        if ldap_users.EvM(login ) && ldap_users.Vi(login, "enabled") == 1 &&
-           login_devices.Evs(login, "devs", sta_id, "dpsk") &&
-           login_devices.Vs(login, "devs", sta_id, "dpsk") != "" &&
-        true {
-          if login_devices.Evi(login, "devs", sta_id, "last_cache_logon") &&
-            login_devices.Vi(login, "devs", sta_id, "last_cache_logon") > login_last_login &&
-          true {
-            login_last_login = login_devices.Vi(login, "devs", sta_id, "last_cache_logon")
-          }
-          if login_devices.Evi(login, "devs", sta_id, "last_portal_logon") &&
-            login_devices.Vi(login, "devs", sta_id, "last_portal_logon") > login_last_login &&
-          true {
-            login_last_login = login_devices.Vi(login, "devs", sta_id, "last_portal_logon")
-          }
-
-          if login_last_login > last_login {
-            last_login = login_last_login
-            dpsk = login_devices.Vs(login, "devs", sta_id, "dpsk")
-            dpsk_login = login
-            dpsk_type = "login"
-            dpsk_username = ldap_users.Vs(login, "name")
-            if login_devices.Evs(login, "devs", sta_id, "level") {
-              if _, ex  := config.Levels[ login_devices.Vs(login, "devs", sta_id, "level") ]; ex {
-                dpsk_level = login_devices.Vs(login, "devs", sta_id, "level")
-              } else {
-                dpsk_level = ""
-              }
-            } else {
-              dpsk_level = ""
-            }
-          }
-        }
-      } // range login_devices
-
-      for voucher, _ := range vouchers {
-        if vouchers.Evi(voucher, "until") && vouchers.Vi(voucher, "until") > now &&
-           vouchers.Evs(voucher, "mac") && vouchers.Vs(voucher, "mac") == sta_id &&
-           vouchers.Evs(voucher, "dpsk") && vouchers.Vs(voucher, "dpsk") != "" &&
-        true {
-          last_voucher_login := int64(0)
-          if vouchers.Evi(voucher, "last_cache_logon") &&
-             vouchers.Vi(voucher, "last_cache_logon") > last_voucher_login &&
-          true {
-            last_voucher_login = vouchers.Vi(voucher, "last_cache_logon")
-          }
-          if vouchers.Evi(voucher, "last_portal_logon") &&
-             vouchers.Vi(voucher, "last_portal_logon") > last_voucher_login &&
-          true {
-            last_voucher_login = vouchers.Vi(voucher, "last_portal_logon")
-          }
-
-          if last_voucher_login > last_login {
-            last_login = last_voucher_login
-            dpsk = vouchers.Vs(voucher, "dpsk")
-            dpsk_type = "voucher"
-            dpsk_voucher = voucher
-            if vouchers.Evs(voucher, "level") {
-              if _, ex  := config.Levels[ vouchers.Vs(voucher, "level") ]; ex {
-                dpsk_level = vouchers.Vs(voucher, "level")
-              } else {
-                dpsk_level = ""
-              }
-            } else {
-              dpsk_level = ""
-            }
-          }
-        }
-      } // range vouchers
-
-      if last_login > 0 {
-        if dpsk_level == "" {
-          dpsk_level = config.Default_level_dpsk
-        }
-
-        a_cache := M{
-          "auth_method": "dpsk",
-          "level": dpsk_level,
-          "time": now,
-        }
-
-        if dpsk_type == "login" {
-          a_cache["login"] = dpsk_login
-          a_cache["username"] = dpsk_username
-        } else if dpsk_type == "voucher" {
-          a_cache["voucher"] = dpsk_voucher
-        }
-
-        auth_cache[sta_id] = a_cache
-
-        npac.AddVSA( dict.NewVSA("Huawei", "Huawei-DPSK-Info", dpsk) )
-
-      } else {
-        npac.Code = radius.AccessReject
-        npac.SetAVP( radius.AVP{Type: radius.ReplyMessage, Value: []byte("No mac found in database")} )
-
-        return
-      }
-
-    }
-
-	  npac.Code = radius.AccessAccept
-
-    buff := make([]byte, 4)
-    binary.BigEndian.PutUint32(buff, uint32(config.Interim_update_period))
-
-    npac.AddAVP( radius.AVP{Type: radius.AcctInterimInterval, Value: buff} )
-
-    var sess_class string
-
-    run := false
-    run_reason := ""
-
-    //fmt.Println("Auth: auth_cache:")
-    //fmt.Println(auth_cache.ToJsonStr(true))
-
-    if !run && secure {
-      run = true
-      run_reason = "dpsk auth"
-    }
-
-    if !run && auth_cache.Evi(sta_id, "time") &&
-       (auth_cache.Vi(sta_id, "time") + config.Reauth_period) > now &&
-    true {
-      run = true
-      run_reason = "sta_id in auth_cache, good time"
-    }
-
-    if !run && auth_cache.Evs(sta_id, "voucher") {
-      voucher := auth_cache.Vs(sta_id, "voucher")
-      if vouchers.EvM(voucher) && vouchers.Evi(voucher, "until") &&
-         vouchers.Vi(voucher, "until") > now &&
-      true {
-        run = true
-        run_reason = "sta_id in auth_cache, good voucher"
-      }
-    }
-
-    if run {
-      if !auth_cache.Evs(sta_id, "level") {
-        panic("No level in cache")
-      }
-
-      if _, ex := config.Levels[ auth_cache.Vs(sta_id, "level") ]; !ex {
-        panic("No level " + auth_cache.Vs(sta_id, "level") + " defined")
-      }
-
-      level := config.Levels[ auth_cache.Vs(sta_id, "level") ]
-
-      npac.SetAVP( radius.AVP{Type: radius.Class, Value: []byte("run")} )
-      sess_class = "run"
+    {
 
       if secure {
-        if level.Secure_filter_acl != "" {
-          npac.AddAVP( radius.AVP{Type: radius.FilterId, Value: []byte(level.Secure_filter_acl)} )
+        last_login := int64(0)
+        dpsk := ""
+        dpsk_voucher := ""
+        dpsk_login := ""
+        dpsk_username := ""
+        dpsk_type := ""
+        dpsk_level := ""
+
+        for login, _ := range login_devices {
+          login_last_login := int64(0)
+          if ldap_users.EvM(login ) && ldap_users.Vi(login, "enabled") == 1 &&
+             login_devices.Evs(login, "devs", sta_id, "dpsk") &&
+             login_devices.Vs(login, "devs", sta_id, "dpsk") != "" &&
+          true {
+            if login_devices.Evi(login, "devs", sta_id, "last_cache_logon") &&
+              login_devices.Vi(login, "devs", sta_id, "last_cache_logon") > login_last_login &&
+            true {
+              login_last_login = login_devices.Vi(login, "devs", sta_id, "last_cache_logon")
+            }
+            if login_devices.Evi(login, "devs", sta_id, "last_portal_logon") &&
+              login_devices.Vi(login, "devs", sta_id, "last_portal_logon") > login_last_login &&
+            true {
+              login_last_login = login_devices.Vi(login, "devs", sta_id, "last_portal_logon")
+            }
+
+            if login_last_login > last_login {
+              last_login = login_last_login
+              dpsk = login_devices.Vs(login, "devs", sta_id, "dpsk")
+              dpsk_login = login
+              dpsk_type = "login"
+              dpsk_username = ldap_users.Vs(login, "name")
+              if login_devices.Evs(login, "devs", sta_id, "level") {
+                if _, ex  := config.Levels[ login_devices.Vs(login, "devs", sta_id, "level") ]; ex {
+                  dpsk_level = login_devices.Vs(login, "devs", sta_id, "level")
+                } else {
+                  dpsk_level = ""
+                }
+              } else {
+                dpsk_level = ""
+              }
+            }
+          }
+        } // range login_devices
+
+        for voucher, _ := range vouchers {
+          if vouchers.Evi(voucher, "until") && vouchers.Vi(voucher, "until") > now &&
+             vouchers.Evs(voucher, "mac") && vouchers.Vs(voucher, "mac") == sta_id &&
+             vouchers.Evs(voucher, "dpsk") && vouchers.Vs(voucher, "dpsk") != "" &&
+          true {
+            last_voucher_login := int64(0)
+            if vouchers.Evi(voucher, "last_cache_logon") &&
+               vouchers.Vi(voucher, "last_cache_logon") > last_voucher_login &&
+            true {
+              last_voucher_login = vouchers.Vi(voucher, "last_cache_logon")
+            }
+            if vouchers.Evi(voucher, "last_portal_logon") &&
+               vouchers.Vi(voucher, "last_portal_logon") > last_voucher_login &&
+            true {
+              last_voucher_login = vouchers.Vi(voucher, "last_portal_logon")
+            }
+
+            if last_voucher_login > last_login {
+              last_login = last_voucher_login
+              dpsk = vouchers.Vs(voucher, "dpsk")
+              dpsk_type = "voucher"
+              dpsk_voucher = voucher
+              if vouchers.Evs(voucher, "level") {
+                if _, ex  := config.Levels[ vouchers.Vs(voucher, "level") ]; ex {
+                  dpsk_level = vouchers.Vs(voucher, "level")
+                } else {
+                  dpsk_level = ""
+                }
+              } else {
+                dpsk_level = ""
+              }
+            }
+          }
+        } // range vouchers
+
+        if last_login > 0 {
+          if dpsk_level == "" {
+            dpsk_level = config.Default_level_dpsk
+          }
+
+          a_cache := M{
+            "auth_method": "dpsk",
+            "level": dpsk_level,
+            "time": now,
+          }
+
+          if dpsk_type == "login" {
+            a_cache["login"] = dpsk_login
+            a_cache["username"] = dpsk_username
+          } else if dpsk_type == "voucher" {
+            a_cache["voucher"] = dpsk_voucher
+          }
+
+          auth_cache[sta_id] = a_cache
+
+          npac.AddVSA( dict.NewVSA("Huawei", "Huawei-DPSK-Info", dpsk) )
+
+        } else {
+          npac.Code = radius.AccessReject
+          npac.SetAVP( radius.AVP{Type: radius.ReplyMessage, Value: []byte("No mac found in database")} )
+
+          return
         }
-      } else {
+
+      }
+
+      npac.Code = radius.AccessAccept
+
+      buff := make([]byte, 4)
+      binary.BigEndian.PutUint32(buff, uint32(config.Interim_update_period))
+
+
+      var sess_class string
+
+      run := false
+      run_reason := ""
+
+      if iot {
+        sess_class = "iot"
+        npac.SetAVP( radius.AVP{Type: radius.UserName, Value: []byte(request.GetUsername())} )
+
+        if !iots.EvM(sta_id) {
+          // unknown sta_id, reject
+          npac.Code = radius.AccessReject
+          npac.SetAVP( radius.AVP{Type: radius.ReplyMessage, Value: []byte("Access denied: unknown user")} )
+
+          return
+        } else if iots.Evi(sta_id, "disabled") && iots.Vi(sta_id, "disabled") != 0 {
+          // disabled sta_id, reject
+          npac.Code = radius.AccessReject
+          npac.SetAVP( radius.AVP{Type: radius.ReplyMessage, Value: []byte("Access denied: disabled user")} )
+
+          return
+        } else if iots.Evi(sta_id, "until") && iots.Vi(sta_id, "until") <= time.Now().Unix() {
+          // expired sta_id, reject
+          npac.Code = radius.AccessReject
+          npac.SetAVP( radius.AVP{Type: radius.ReplyMessage, Value: []byte("Access denied: expired user")} )
+
+          return
+        } else if !iots.Evs(sta_id, "level") {
+          // no level set, reject
+          npac.Code = radius.AccessReject
+          npac.SetAVP( radius.AVP{Type: radius.ReplyMessage, Value: []byte("Access denied: no level set")} )
+
+          return
+        } else if _, ex := config.Levels[ iots.Vs(sta_id, "level") ]; !ex {
+          npac.Code = radius.AccessReject
+          npac.SetAVP( radius.AVP{Type: radius.ReplyMessage, Value: []byte("Access denied: bad level set")} )
+
+          return
+        }
+
+        level := config.Levels[ iots.Vs(sta_id, "level") ]
         if level.Filter_acl != "" {
           npac.AddAVP( radius.AVP{Type: radius.FilterId, Value: []byte(level.Filter_acl)} )
         }
+
+        npac.SetAVP( radius.AVP{Type: radius.Class, Value: []byte("iot")} )
+        npac.AddAVP( radius.AVP{Type: radius.AcctInterimInterval, Value: buff} )
+
+        redis_log("radius_log", config.Radius_log_size, M{
+          "time": now,
+          "message": "Auth iot",
+          "state": "iot",
+          "run_reason": "iot",
+          "auth_cache": iots.VM(sta_id),
+          "sta_id": sta_id,
+          "sta_ip": sta_ip,
+          "sess_id": sess_id,
+          "request": request.String(),
+        })
+        return
       }
 
-      if auth_cache.Evs(sta_id, "login") {
-			  npac.AddAVP( radius.AVP{Type: radius.UserName, Value: []byte(auth_cache.Vs(sta_id, "login"))} )
+      npac.AddAVP( radius.AVP{Type: radius.AcctInterimInterval, Value: buff} )
+      //fmt.Println("Auth: auth_cache:")
+      //fmt.Println(auth_cache.ToJsonStr(true))
+
+      if !run && secure {
+        run = true
+        run_reason = "dpsk auth"
       }
 
-      if !secure && sess_class == "run" && auth_cache.Evs(sta_id, "login") &&
-        sta_ip != "0.0.0.0" &&
-        config.Fac_server != "" && config.Fac_secret != "" &&
+      if !run && auth_cache.Evi(sta_id, "time") &&
+         (auth_cache.Vi(sta_id, "time") + config.Reauth_period) > now &&
       true {
-        fac_login := auth_cache.Vs(sta_id, "login")
-        go func() {
-          fac := radius.NewRadClient(config.Fac_server, config.Fac_secret)
-          fac.SetTimeout(time.Second)
-          req := fac.NewRequest(radius.AccountingRequest)
-
-          req.AddAVP( *SessIdAVP )
-          req.AddAVP( radius.AVP{Type: radius.UserName, Value: []byte(fac_login)} )
-          req.AddAVP( *StaIpAVP )
-
-          acct_type_buff := make([]byte, 4)
-          binary.BigEndian.PutUint32(acct_type_buff, uint32(radius.AcctStatusTypeEnumStart))
-
-          req.AddAVP( radius.AVP{Type: radius.AcctStatusType, Value: acct_type_buff } )
-
-          fac.Send(req)
-
-        } ()
+        run = true
+        run_reason = "sta_id in auth_cache, good time"
       }
 
-      redis_log("radius_log", config.Radius_log_size, M{
-        "time": now,
-        "message": "Auth run",
-        "state": "run",
-        "run_reason": run_reason,
-        "auth_cache": auth_cache.VM(sta_id),
-        "sta_id": sta_id,
-        "sta_ip": sta_ip,
-        "sess_id": sess_id,
-        "request": request.String(),
-      })
-		} else {
-      npac.AddVSA( dict.NewVSA("Huawei", "Huawei-Portal-URL", config.Redir_uri) )
-			npac.AddVSA( dict.NewVSA("Huawei", "Huawei-Redirect-ACL", config.Redir_acl) )
-			npac.AddAVP( radius.AVP{Type: radius.FilterId, Value: []byte(config.Portal_filter_acl)} )
-      sess_class = "portal"
+      if !run && auth_cache.Evs(sta_id, "voucher") {
+        voucher := auth_cache.Vs(sta_id, "voucher")
+        if vouchers.EvM(voucher) && vouchers.Evi(voucher, "until") &&
+           vouchers.Vi(voucher, "until") > now &&
+        true {
+          run = true
+          run_reason = "sta_id in auth_cache, good voucher"
+        }
+      }
 
-      redis_log("radius_log", config.Radius_log_size, M{
-        "time": now,
-        "message": "Auth portal",
-        "state": "portal",
-        "sta_id": sta_id,
-        "sta_ip": sta_ip,
-        "sess_id": sess_id,
-        "request": request.String(),
-      })
+      if run {
+        if !auth_cache.Evs(sta_id, "level") {
+          panic("No level in cache")
+        }
+
+        if _, ex := config.Levels[ auth_cache.Vs(sta_id, "level") ]; !ex {
+          panic("No level " + auth_cache.Vs(sta_id, "level") + " defined")
+        }
+
+        level := config.Levels[ auth_cache.Vs(sta_id, "level") ]
+
+        npac.SetAVP( radius.AVP{Type: radius.Class, Value: []byte("run")} )
+        sess_class = "run"
+
+        if secure {
+          if level.Secure_filter_acl != "" {
+            npac.AddAVP( radius.AVP{Type: radius.FilterId, Value: []byte(level.Secure_filter_acl)} )
+          }
+        } else {
+          if level.Filter_acl != "" {
+            npac.AddAVP( radius.AVP{Type: radius.FilterId, Value: []byte(level.Filter_acl)} )
+          }
+        }
+
+        if auth_cache.Evs(sta_id, "login") {
+          npac.AddAVP( radius.AVP{Type: radius.UserName, Value: []byte(auth_cache.Vs(sta_id, "login"))} )
+        }
+
+        if !secure && sess_class == "run" && auth_cache.Evs(sta_id, "login") &&
+          sta_ip != "0.0.0.0" &&
+          config.Fac_server != "" && config.Fac_secret != "" &&
+        true {
+          fac_login := auth_cache.Vs(sta_id, "login")
+          go func() {
+            fac := radius.NewRadClient(config.Fac_server, config.Fac_secret)
+            fac.SetTimeout(time.Second)
+            req := fac.NewRequest(radius.AccountingRequest)
+
+            req.AddAVP( *SessIdAVP )
+            req.AddAVP( radius.AVP{Type: radius.UserName, Value: []byte(fac_login)} )
+            req.AddAVP( *StaIpAVP )
+
+            acct_type_buff := make([]byte, 4)
+            binary.BigEndian.PutUint32(acct_type_buff, uint32(radius.AcctStatusTypeEnumStart))
+
+            req.AddAVP( radius.AVP{Type: radius.AcctStatusType, Value: acct_type_buff } )
+
+            fac.Send(req)
+
+          } ()
+        }
+
+        redis_log("radius_log", config.Radius_log_size, M{
+          "time": now,
+          "message": "Auth run",
+          "state": "run",
+          "run_reason": run_reason,
+          "auth_cache": auth_cache.VM(sta_id),
+          "sta_id": sta_id,
+          "sta_ip": sta_ip,
+          "sess_id": sess_id,
+          "request": request.String(),
+        })
+      } else {
+        npac.AddVSA( dict.NewVSA("Huawei", "Huawei-Portal-URL", config.Redir_uri) )
+        npac.AddVSA( dict.NewVSA("Huawei", "Huawei-Redirect-ACL", config.Redir_acl) )
+        npac.AddAVP( radius.AVP{Type: radius.FilterId, Value: []byte(config.Portal_filter_acl)} )
+        sess_class = "portal"
+
+        redis_log("radius_log", config.Radius_log_size, M{
+          "time": now,
+          "message": "Auth portal",
+          "state": "portal",
+          "sta_id": sta_id,
+          "sta_ip": sta_ip,
+          "sess_id": sess_id,
+          "request": request.String(),
+        })
+      }
+      npac.SetAVP( radius.AVP{Type: radius.Class, Value: []byte(sess_class)} )
+
+      //fmt.Println(now_debug + "Auth sta: " +sta_id + " sess: " + sess_id + " class: " + sess_class)
     }
-    npac.SetAVP( radius.AVP{Type: radius.Class, Value: []byte(sess_class)} )
-
-    //fmt.Println(now_debug + "Auth sta: " +sta_id + " sess: " + sess_id + " class: " + sess_class)
 
   case radius.AccountingRequest:
-    var sess_class string
+    {
+      var sess_class string
 
-    if SessClassAVP == nil {
-      panic(silentError("No Class in Accounting"))
-    }
-
-    sess_class = SessClassAVP.Decode(request).(string)
-
-    if !sessions.EvM(sess_id) &&
-      ( request.GetAcctStatusType() == radius.AcctStatusTypeEnumStart ||
-        request.GetAcctStatusType() == radius.AcctStatusTypeEnumInterimUpdate ||
-      false) &&
-    true {
-      sessions[sess_id] = M{}
-
-      if random_reg.MatchString(sta_id) {
-        sessions.VM(sess_id)["vendor"] = "Random"
+      if SessClassAVP != nil {
+        sess_class = SessClassAVP.Decode(request).(string)
+      } else if !iot {
+        panic(silentError("No Class in Accounting"))
       } else {
-        m := mac_reg.FindStringSubmatch(sta_id)
-        oui := strings.ToLower(strings.Join(m[1:4], ""))
-
-        vendor, ex := vendors[oui]
-
-        if ex {
-          sessions.VM(sess_id)["vendor"] = vendor
-        } else {
-          sessions.VM(sess_id)["vendor"] = "Unknown"
-        }
+        sess_class = "iot"
       }
 
-      sessions.VM(sess_id)["sess_user"] = request.GetUsername()
-      sessions.VM(sess_id)["sess_id"] = sess_id
-      sessions.VM(sess_id)["sta_id"] = sta_id
-      sessions.VM(sess_id)["create_time"] = now
 
-
-      sessions.VM(sess_id)["code"] = KeyGenDict([]rune(config.Sms_code_dict), config.Sms_code_length)
-
-      if sess_class == "run" {
-        if auth_cache.EvM(sta_id) {
-          if request.GetAcctStatusType() == radius.AcctStatusTypeEnumStart {
-            sessions.VM(sess_id)["auth_source"] = "cache"
-          } else {
-            sessions.VM(sess_id)["auth_source"] = "adopt"
-          }
-
-          if auth_cache.Evs(sta_id, "voucher") {
-            voucher := auth_cache.Vs(sta_id, "voucher")
-            sessions.VM(sess_id)["voucher"] = voucher
-            if vouchers.EvM(voucher) {
-              vouchers.VM(voucher)["last_cache_logon"] = now
-            }
-          }
-
-          if auth_cache.Evs(sta_id, "login") {
-            login := auth_cache.Vs(sta_id, "login")
-            sessions.VM(sess_id)["login"] = login
-
-            if login_devices.EvM(login, "devs", sta_id) {
-              login_devices.VM(login, "devs", sta_id)["last_cache_logon"] = now
-            }
-          }
-
-          sessions.VM(sess_id)["level"] = auth_cache.Vs(sta_id, "level")
-
-          sessions.VM(sess_id)["authenticated"] = now
-
-          if auth_cache.Evs(sta_id, "auth_method") {
-            sessions.VM(sess_id)["auth_method"] = auth_cache.Vs(sta_id, "auth_method")
-          }
-        }
-      }
-
-      redis_log("radius_log", config.Radius_log_size, M{
-        "time": now,
-        "message": "Acct session create",
-        "state": sess_class,
-        "sta_id": sta_id,
-        "sta_ip": sta_ip,
-        "request": request.String(),
-        "session": sessions.VM(sess_id).Copy(),
-      })
-    }
-
-    if sessions.EvM(sess_id) {
-      if sessions.Evs(sess_id, "state") && sessions.Vs(sess_id, "state") != sess_class {
-        //fmt.Println(now_debug + "Acct sta: " +sta_id + " sess: " + sess_id +
-          //" class change: " + sessions.Vs(sess_id, "state") + "->" + sess_class,
-        //)
-      }
-      sessions.VM(sess_id)["state"] = sess_class
-
-      sessions.VM(sess_id)["sess_user"] = request.GetUsername()
-
-      if StaIpAVP != nil {
-        sessions.VM(sess_id)["sta_ip"] = StaIpAVP.Decode(request).(net.IP).String()
-      } else if !sessions.Evs(sess_id, "sta_ip") {
-        sessions.VM(sess_id)["sta_ip"] = "0.0.0.0"
-      }
-
-      sessions.VM(sess_id)["nas_id"] = nas_id
-      sessions.VM(sess_id)["nas_ip"] = nas_ip
-
-      if sess_class == "run" && sessions.Evs(sess_id, "login") &&
-        StaIpAVP != nil &&
-        sessions.Evs(sess_id, "sta_ip") && sessions.Vs(sess_id, "sta_ip") != "0.0.0.0" &&
-        config.Fac_server != "" && config.Fac_secret != "" &&
+      if !sessions.EvM(sess_id) &&
+        ( request.GetAcctStatusType() == radius.AcctStatusTypeEnumStart ||
+          request.GetAcctStatusType() == radius.AcctStatusTypeEnumInterimUpdate ||
+        false) &&
       true {
-        fac_login := sessions.Vs(sess_id, "login")
-        go func() {
-          fac := radius.NewRadClient(config.Fac_server, config.Fac_secret)
-          fac.SetTimeout(time.Second)
-          req := fac.NewRequest(radius.AccountingRequest)
+        sessions[sess_id] = M{}
 
-          req.AddAVP( *SessIdAVP )
-          req.AddAVP( radius.AVP{Type: radius.UserName, Value: []byte(fac_login)} )
-          req.AddAVP( *request.GetAVP(radius.AcctStatusType) )
+        if random_reg.MatchString(sta_id) {
+          sessions.VM(sess_id)["vendor"] = "Random"
+        } else {
+          m := mac_reg.FindStringSubmatch(sta_id)
+          oui := strings.ToLower(strings.Join(m[1:4], ""))
 
-          fac.Send(req)
+          vendor, ex := vendors[oui]
 
-        } ()
-      }
-    }
-
-
-		// accounting start or end
-    switch request.GetAcctStatusType() {
-    case radius.AcctStatusTypeEnumStart:
-      sessions.VM(sess_id)["acct_start"] = now
-      sessions.VM(sess_id)["acct_update"] = now
-      //fmt.Println(now_debug + "Acct start sta: " +sta_id + " sess: " + sess_id + " class: " + sess_class)
-
-      redis_log("radius_log", config.Radius_log_size, M{
-        "time": now,
-        "message": "Acct start",
-        "sta_id": sta_id,
-        "sta_ip": sta_ip,
-        "request": request.String(),
-        "session": sessions.VM(sess_id).Copy(),
-      })
-    case radius.AcctStatusTypeEnumInterimUpdate:
-      sessions.VM(sess_id)["acct_update"] = now
-
-      if !sessions.Evi(sess_id, "acct_start") {
-        start_time := int64(0)
-        AcctSessTimeAVP := request.GetAVP(radius.AcctSessionTime)
-        if AcctSessTimeAVP != nil {
-          _int, _err := AnyToInt64(AcctSessTimeAVP.Decode(request))
-          if _err == nil {
-            start_time = now - _int
+          if ex {
+            sessions.VM(sess_id)["vendor"] = vendor
+          } else {
+            sessions.VM(sess_id)["vendor"] = "Unknown"
           }
         }
-        sessions.VM(sess_id)["acct_start"] = start_time
-      }
-    case radius.AcctStatusTypeEnumStop:
-      // TODO log session stop
-      //fmt.Println(now_debug + "Acct stop sta: " +sta_id + " sess: " + sess_id + " class: " + sess_class)
-      log_rec := M{
-        "time": now,
-        "message": "Acct stop",
-        "sta_id": sta_id,
-        "sta_ip": sta_ip,
-        "request": request.String(),
+
+        sessions.VM(sess_id)["sess_user"] = request.GetUsername()
+        sessions.VM(sess_id)["sess_id"] = sess_id
+        sessions.VM(sess_id)["sta_id"] = sta_id
+        sessions.VM(sess_id)["create_time"] = now
+
+        if unifi_controller != "" {
+          sessions.VM(sess_id)["unifi_controller"] = unifi_controller
+          sessions.VM(sess_id)["unifi_site"] = unifi_site
+          sessions.VM(sess_id)["unifi"] = "1"
+          sessions.VM(sess_id)["unifi_mac"] = request.GetUsername()
+        }
+
+        sessions.VM(sess_id)["code"] = KeyGenDict([]rune(config.Sms_code_dict), config.Sms_code_length)
+
+        if sess_class == "run" {
+          if auth_cache.EvM(sta_id) {
+            if request.GetAcctStatusType() == radius.AcctStatusTypeEnumStart {
+              sessions.VM(sess_id)["auth_source"] = "cache"
+            } else {
+              sessions.VM(sess_id)["auth_source"] = "adopt"
+            }
+
+            if auth_cache.Evs(sta_id, "voucher") {
+              voucher := auth_cache.Vs(sta_id, "voucher")
+              sessions.VM(sess_id)["voucher"] = voucher
+              if vouchers.EvM(voucher) {
+                vouchers.VM(voucher)["last_cache_logon"] = now
+              }
+            }
+
+            if auth_cache.Evs(sta_id, "login") {
+              login := auth_cache.Vs(sta_id, "login")
+              sessions.VM(sess_id)["login"] = login
+
+              if login_devices.EvM(login, "devs", sta_id) {
+                login_devices.VM(login, "devs", sta_id)["last_cache_logon"] = now
+              }
+            }
+
+            sessions.VM(sess_id)["level"] = auth_cache.Vs(sta_id, "level")
+
+            sessions.VM(sess_id)["authenticated"] = now
+
+            if auth_cache.Evs(sta_id, "auth_method") {
+              sessions.VM(sess_id)["auth_method"] = auth_cache.Vs(sta_id, "auth_method")
+            }
+          }
+        } else if sess_class == "iot" {
+          if iots.EvM(sta_id) {
+            iots.VM(sta_id)["last_connect"] = now
+            sessions.VM(sess_id)["level"] = iots.Vs(sta_id, "level")
+          }
+          sessions.VM(sess_id)["authenticated"] = now
+          sessions.VM(sess_id)["auth_method"] = "iot"
+        }
+
+        redis_log("radius_log", config.Radius_log_size, M{
+          "time": now,
+          "message": "Acct session create",
+          "state": sess_class,
+          "sta_id": sta_id,
+          "sta_ip": sta_ip,
+          "request": request.String(),
+          "session": sessions.VM(sess_id).Copy(),
+        })
       }
 
       if sessions.EvM(sess_id) {
-        log_rec["session"] = sessions.VM(sess_id).Copy()
-        delete(sessions, sess_id)
+        if sessions.Evs(sess_id, "state") && sessions.Vs(sess_id, "state") != sess_class {
+          //fmt.Println(now_debug + "Acct sta: " +sta_id + " sess: " + sess_id +
+            //" class change: " + sessions.Vs(sess_id, "state") + "->" + sess_class,
+          //)
+        }
+        sessions.VM(sess_id)["state"] = sess_class
+
+        sessions.VM(sess_id)["sess_user"] = request.GetUsername()
+
+        if StaIpAVP != nil {
+          sessions.VM(sess_id)["sta_ip"] = StaIpAVP.Decode(request).(net.IP).String()
+        } else if !sessions.Evs(sess_id, "sta_ip") {
+          sessions.VM(sess_id)["sta_ip"] = "0.0.0.0"
+        }
+
+        sessions.VM(sess_id)["nas_id"] = nas_id
+        sessions.VM(sess_id)["nas_ip"] = nas_ip
+
+        if sess_class == "run" && sessions.Evs(sess_id, "login") &&
+          StaIpAVP != nil &&
+          sessions.Evs(sess_id, "sta_ip") && sessions.Vs(sess_id, "sta_ip") != "0.0.0.0" &&
+          config.Fac_server != "" && config.Fac_secret != "" &&
+        true {
+          fac_login := sessions.Vs(sess_id, "login")
+          go func() {
+            fac := radius.NewRadClient(config.Fac_server, config.Fac_secret)
+            fac.SetTimeout(time.Second)
+            req := fac.NewRequest(radius.AccountingRequest)
+
+            req.AddAVP( *SessIdAVP )
+            req.AddAVP( radius.AVP{Type: radius.UserName, Value: []byte(fac_login)} )
+            req.AddAVP( *request.GetAVP(radius.AcctStatusType) )
+
+            fac.Send(req)
+
+          } ()
+        }
       }
 
-      redis_log("radius_log", config.Radius_log_size, log_rec)
-    default:
-      panic(silentError("Unsupported Accounting Type"))
+
+      // accounting start or end
+      switch request.GetAcctStatusType() {
+      case radius.AcctStatusTypeEnumStart:
+        sessions.VM(sess_id)["acct_start"] = now
+        sessions.VM(sess_id)["acct_update"] = now
+        //fmt.Println(now_debug + "Acct start sta: " +sta_id + " sess: " + sess_id + " class: " + sess_class)
+
+        if sess_class == "iot" && iots.EvM(sta_id) {
+          iots.VM(sta_id)["last_connect"] = now
+          iots.VM(sta_id)["last_seen"] = now
+        }
+        redis_log("radius_log", config.Radius_log_size, M{
+          "time": now,
+          "message": "Acct start",
+          "sta_id": sta_id,
+          "sta_ip": sta_ip,
+          "request": request.String(),
+          "session": sessions.VM(sess_id).Copy(),
+        })
+      case radius.AcctStatusTypeEnumInterimUpdate:
+        sessions.VM(sess_id)["acct_update"] = now
+
+        if !sessions.Evi(sess_id, "acct_start") {
+          start_time := int64(0)
+          AcctSessTimeAVP := request.GetAVP(radius.AcctSessionTime)
+          if AcctSessTimeAVP != nil {
+            _int, _err := AnyToInt64(AcctSessTimeAVP.Decode(request))
+            if _err == nil {
+              start_time = now - _int
+            }
+          }
+          sessions.VM(sess_id)["acct_start"] = start_time
+        }
+        if sess_class == "iot" && iots.EvM(sta_id) {
+          iots.VM(sta_id)["last_seen"] = now
+        }
+      case radius.AcctStatusTypeEnumStop:
+        // TODO log session stop
+        //fmt.Println(now_debug + "Acct stop sta: " +sta_id + " sess: " + sess_id + " class: " + sess_class)
+        log_rec := M{
+          "time": now,
+          "message": "Acct stop",
+          "sta_id": sta_id,
+          "sta_ip": sta_ip,
+          "request": request.String(),
+        }
+
+        if sessions.EvM(sess_id) {
+          log_rec["session"] = sessions.VM(sess_id).Copy()
+          delete(sessions, sess_id)
+        }
+
+        redis_log("radius_log", config.Radius_log_size, log_rec)
+
+        if sess_class == "iot" && iots.EvM(sta_id) {
+          iots.VM(sta_id)["last_disconnect"] = now
+        }
+      default:
+        panic(silentError("Unsupported Accounting Type"))
+      }
+      npac.Code = radius.AccountingResponse
     }
-		npac.Code = radius.AccountingResponse
 	default:
     panic(silentError("Unsupported request Code"))
 	}
@@ -651,9 +781,11 @@ func coa_server(stop chan string, wg *sync.WaitGroup) {
 
       drop := false
 
-      if !auth_cache.EvM(sta_id) {
+      iot := sessions.Evs(sess_id, "state") && sessions.Vs(sess_id, "state") == "iot"
+
+      if !auth_cache.EvM(sta_id) && !iot {
         drop = true
-      } else {
+      } else if !iot {
         if auth_cache.Evi(sta_id, "time") &&
            auth_cache.Vi(sta_id, "time") + config.Reauth_period <= now &&
            !auth_cache.Evs(sta_id, "voucher") &&
@@ -689,9 +821,19 @@ func coa_server(stop chan string, wg *sync.WaitGroup) {
         if drop {
           delete(auth_cache, sta_id)
         }
+      } else {
+        // iot
+        if !iots.EvM(sta_id) ||
+           (iots.Evi(sta_id, "disabled") && iots.Vi(sta_id, "disabled") != 0) ||
+           (iots.Evi(sta_id, "until") && iots.Vi(sta_id, "until") <= time.Now().Unix()) ||
+        false {
+          drop = true
+        }
       }
 
-      if drop && sessions.Vs(sess_id, "state") == "run" {
+      if drop &&
+         (sessions.Vs(sess_id, "state") == "run" || sessions.Vs(sess_id, "state") == "iot") &&
+      true {
         sessions.VM(sess_id)["coa_state"] = "drop"
       }
 
@@ -702,9 +844,9 @@ func coa_server(stop chan string, wg *sync.WaitGroup) {
           session: sessions.VM(sess_id).Copy(),
           action: sessions.Vs(sess_id, "coa_state"),
         })
-        //fmt.Println(now_debug + "CoA sta: " + sta_id + " sess: " + sess_id +
-        //  " to state: " + sessions.Vs(sess_id, "coa_state"),
-        //)
+        fmt.Println(now_debug + "CoA sta: " + sta_id + " sess: " + sess_id +
+          " to state: " + sessions.Vs(sess_id, "coa_state"),
+        )
         //fmt.Println("auth_cache:")
         //fmt.Println(auth_cache.ToJsonStr(true))
       }
@@ -759,9 +901,12 @@ func coa_server(stop chan string, wg *sync.WaitGroup) {
 	          var perr error
 
 	          if coa.action == "drop" {
-              post_data["cmd"] = "unauthorize-guest"
+              perr = nil
+              if coa.session.Vs("state") != "iot" {
+                post_data["cmd"] = "unauthorize-guest"
 
-	            _, perr = UnifiPost(unifis[unifi_controller], unifi_controller, post_uri, post_data)
+	              _, perr = UnifiPost(unifis[unifi_controller], unifi_controller, post_uri, post_data)
+              }
 	            if perr != nil {
 		            fmt.Println(now_debug + "Error: unauthorize-guest:", perr.Error())
               } else {

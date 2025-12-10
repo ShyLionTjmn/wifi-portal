@@ -35,6 +35,7 @@ var ldap_users M = M{}
 var login_devices M = M{}
 var vouchers M = M{}
 var vendors map[string]string
+var iots M = M{}
 
 //
 
@@ -49,6 +50,8 @@ var voucher_admins_reg *regexp.Regexp
 var email_reg *regexp.Regexp
 
 var secure_clid_reg *regexp.Regexp
+
+var iot_called_sid_reg *regexp.Regexp
 
 func init() {
 
@@ -70,6 +73,10 @@ func init() {
 
   if config.Secure_clid_reg != "" {
     secure_clid_reg = regexp.MustCompile(config.Secure_clid_reg)
+  }
+
+  if config.Iot_called_sid_reg != "" {
+    iot_called_sid_reg = regexp.MustCompile(config.Iot_called_sid_reg)
   }
 
   if config.Levels == nil {
@@ -136,6 +143,7 @@ func main() {
     RedBackup{"login_devices", &login_devices},
     RedBackup{"ldap_users", &ldap_users},
     RedBackup{"vouchers", &vouchers},
+    RedBackup{"iots", &iots},
   }
 
   if !opt_n {

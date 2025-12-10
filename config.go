@@ -104,7 +104,8 @@ const DEFAULT_Prohibit_random = 0
 type Unifi_Controller struct {
   Host				string
   Login				string
-  Password			string
+  Password	  string
+  NasID       string
 }
 
 type Radius_Client struct {
@@ -249,6 +250,8 @@ type Config struct {
   Allow_totp                    int64
 
   Prohibit_random               int64
+
+  Iot_called_sid_reg            string
 
   Config_origin                 string
 }
