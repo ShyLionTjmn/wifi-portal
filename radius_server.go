@@ -367,20 +367,16 @@ func (p radiusService) RadiusHandle(request *radius.Packet) (npac *radius.Packet
           npac.SetAVP( radius.AVP{Type: radius.ReplyMessage, Value: []byte("Access denied: expired user")} )
 
           return
-        } else if !iots.Evs(sta_id, "level") {
-          // no level set, reject
-          npac.Code = radius.AccessReject
-          npac.SetAVP( radius.AVP{Type: radius.ReplyMessage, Value: []byte("Access denied: no level set")} )
-
-          return
-        } else if _, ex := config.Levels[ iots.Vs(sta_id, "level") ]; !ex {
-          npac.Code = radius.AccessReject
-          npac.SetAVP( radius.AVP{Type: radius.ReplyMessage, Value: []byte("Access denied: bad level set")} )
-
-          return
         }
 
-        level := config.Levels[ iots.Vs(sta_id, "level") ]
+        level := config.Levels[ config.Default_level_iot ]
+
+        if iots.Evs(sta_id, "level") {
+          if _, ex := config.Levels[ iots.Vs(sta_id, "level") ]; ex {
+            level = config.Levels[ iots.Vs(sta_id, "level") ]
+          }
+        }
+
         if level.Filter_acl != "" {
           npac.AddAVP( radius.AVP{Type: radius.FilterId, Value: []byte(level.Filter_acl)} )
         }
@@ -597,7 +593,13 @@ func (p radiusService) RadiusHandle(request *radius.Packet) (npac *radius.Packet
         } else if sess_class == "iot" {
           if iots.EvM(sta_id) {
             iots.VM(sta_id)["last_connect"] = now
-            sessions.VM(sess_id)["level"] = iots.Vs(sta_id, "level")
+            level := config.Default_level_iot
+            if iots.Evs(sta_id, "level") {
+              if _, ex := config.Levels[ iots.Vs(sta_id, "level") ]; ex {
+                level = iots.Vs(sta_id, "level")
+              }
+            }
+            sessions.VM(sess_id)["level"] = level
           }
           sessions.VM(sess_id)["authenticated"] = now
           sessions.VM(sess_id)["auth_method"] = "iot"

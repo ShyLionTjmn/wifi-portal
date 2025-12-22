@@ -207,7 +207,8 @@ type Config struct {
   Default_level_voucher         string
   Default_level_sms             string
   Default_level_2fa             string
-  Default_level_dpsk             string
+  Default_level_dpsk            string
+  Default_level_iot             string
 
   Redir_acl                     string
   Portal_filter_acl             string

@@ -2413,7 +2413,26 @@ function actionIoT() {
   workarea.empty();
   fixed_div.empty();
 
+  fixed_div
+   .append( $(LABEL)
+     .addClass(["button", "ui-icon", "ui-icon-plus"])
+     .title("Добавить устройство")
+     .click(function() {
+       let dt = $(".iots_table").DataTable();
+
+       edit_iot_dlg(undefined, function(res) {
+         let tr = iot_row(res["ok"]["row"]);
+         dt.row.add(tr);
+         dt.draw();
+       });
+     })
+   )
+   .append( $(SPAN).text(" Добавить устройство")
+   )
+  ;
+
   let table = $(TABLE)
+   .addClass("iots_table")
    .append( $(THEAD)
      .append( $(TR)
        .append( $(TH).text("") )
@@ -2462,6 +2481,25 @@ function iot_row(row_data) {
     mac_search += " " + format_mac(row_data['mac'], mac_formats[mfi]);
   };
 
+  let status_span = $(SPAN);
+
+  let now = unix_timestamp();
+
+  if(row_data["disabled"] === 1) {
+    status_span.text("Откл");
+    status_span.css({"color": "#404040"});
+  } else if(row_data["until"] !== undefined && row_data["until"] !== 0) {
+    if(row_data["until"] > now ) {
+      status_span.text("До " + from_unix_time(row_data["until"]));
+      status_span.css({"color": "green"});
+    } else {
+      status_span.text("Истек " + from_unix_time(row_data["until"]));
+      status_span.css({"color": "red"});
+    };
+  } else {
+    status_span.text("Вкл");
+    status_span.css({"color": "green"});
+  };
 
   let tr = $(TR)
    .data("data", row_data)
@@ -2477,59 +2515,43 @@ function iot_row(row_data) {
 
          let row_data = tr.data("data");
 
-         if(row.child.isShown()) {
-           row.child.hide();
-           return;
-         };
+         edit_iot_dlg(row_data, function(res) {
+           row.remove();
+           let tr = iot_row(res["ok"]["row"]);
+           dt.row.add(tr);
+           dt.draw();
+         });
 
-         let child_div = $(DIV)
-          .addClass("child")
-          .addClass("iot_edit")
-          .data("tr", tr)
-         ;
+       })
+     )
+     .append( $(LABEL)
+       .css({"margin-left": "0.5em"})
+       .addClass(["button", "ui-icon", "ui-icon-trash"])
+       .addClass("del_btn")
+       .click(function() {
+         let tr = $(this).closest("TR");
+         let table = tr.closest("TABLE");
+         let dt = table.DataTable();
+         let row = dt.row(tr);
 
+         let row_data = tr.data("data");
 
-         let levels = keys(const_access_levels);
+         show_confirm("Подтвердите удаление устройства " + row_data["mac"] + ".\nВнимание! Отмена операции будет невозможна!",
+           function() {
+             run_query({"action": "del_iot", "mac": row_data["mac"]}, function() {
+               row.remove();
+               dt.draw();
+             })
+           }
+         );
 
-         levels.sort();
-
-         let auth_level_sel = $(SELECT);
-
-
-         for(let li in levels) {
-           let access_level = levels[li];
-
-           auth_level_sel
-            .append( $(OPTION)
-              .val(access_level)
-              .text(const_access_levels[access_level]["Name"])
-            )
-           ;
-         };
-
-         auth_level_sel.val(row_data['level']);
-
-         let last_logon = "";
-         if(row_data["last_connect"] !== undefined) {
-           last_logon = from_unix_time(row_data["devs"]["devs"][mac]["last_logon"]);
-         };
-
-         child_div
-          .append( $(SPAN).text(mac)
-            .title( row_data["devs"]["devs"][mac]["vendor"] )
-          )
-          .append( auth_level_sel )
-          .append( $(SPAN).text(last_logon) )
-         ;
-
-         row.child( child_div ).show();
        })
      )
    )
    .append( $(TD).text(row_data["mac"]) )
    .append( $(TD).addClass("mac_search").text(mac_search) )
-   .append( $(TD).addClass("iot_status").text("") )
-   .append( $(TD).addClass("iot_descr").text("") )
+   .append( $(TD).addClass("iot_status").append(status_span) )
+   .append( $(TD).addClass("iot_descr").text(row_data["descr"]) )
   ;
 
   if(row_data["disabled"] === 1) {
@@ -2537,4 +2559,197 @@ function iot_row(row_data) {
   };
 
   return tr;
+};
+
+function edit_iot_dlg(row_data, on_done) {
+  let levels = keys(const_access_levels);
+
+  levels.sort();
+
+  let level_sel = $(SELECT)
+   .addClass("level")
+   .append( $(OPTION).text("По умолч.").val("") )
+  ;
+
+  for(let li in levels) {
+    let access_level = levels[li];
+
+    level_sel
+     .append( $(OPTION)
+       .val(access_level)
+       .text(const_access_levels[access_level]["Name"])
+     )
+    ;
+  };
+
+  if(row_data !== undefined) {
+    level_sel.val(row_data["level"]);
+  } else {
+    level_sel.val("");
+  };
+
+  let date_picker = $(INPUT)
+   .addClass("until")
+   .css({"width": "6em"})
+  ;
+
+  let dialog = $(DIV).addClass("dialog_start")
+   .data("donefunc", on_done)
+   .data("data", row_data)
+   .title(row_data === undefined ? "Добавление IoT устройства" : "Редактирование IoT устройства")
+   .append( $(TABLE)
+     .append( $(TR)
+       .append( $(TD)
+         .append( $(SPAN).text("MAC")
+         )
+       )
+       .append( $(TD)
+         .append( $(INPUT).addClass("mac")
+           .css({"width": "10em"})
+           .val(row_data === undefined ? "" : row_data["mac"])
+         )
+       )
+     )
+     .append( $(TR)
+       .append( $(TD)
+         .append( $(SPAN).text("Уровень доступа")
+         )
+         .append( tip("Уровень по умолчанию задается настройками системы\n"
+                      + "Если задать для Устройства уровень доступа, то он будет установлен принудительно"
+           )
+         )
+       )
+       .append( $(TD)
+         .append( level_sel
+         )
+       )
+     )
+     .append( $(TR)
+       .append( $(TD)
+         .append( $(SPAN).text("Коментарий")
+         )
+       )
+       .append( $(TD)
+         .append( $(INPUT).addClass("descr")
+           .css({"width": "30em"})
+           .val(row_data === undefined ? "" : row_data["descr"])
+         )
+       )
+     )
+     .append( $(TR)
+       .append( $(TD)
+         .append( $(SPAN).text("Срок действия (включительно)")
+         )
+       )
+       .append( $(TD)
+         .append( date_picker
+         )
+         .append( $(SPAN).addClass("min1em") )
+         .append( $(LABEL)
+           .addClass(["ui-icon", "ui-icon-delete", "button"])
+         )
+       )
+     )
+     .append( $(TR)
+       .append( $(TD)
+         .append( $(SPAN).text("Отключен")
+         )
+       )
+       .append( $(TD)
+         .append( $(INPUT).addClass("disabled")
+           .prop({"type": "checkbox", "checked": row_data !== undefined && row_data["disabled"] === 1})
+         )
+       )
+     )
+   )
+  ;
+
+  let buttons = [];
+
+  buttons.push({
+    'text': row_data === undefined ? 'Добавить' : 'Сохранить',
+    'click': function() {
+      let dlg = $(this);
+
+      let prev_row = dlg.data("data");
+
+      let until = 0;
+
+      let until_date = dlg.find("INPUT.until").datepicker("getDate");
+      if(until_date !== null) {
+
+        until_date.setHours(23);
+        until_date.setMinutes(59);
+        until_date.setSeconds(59);
+
+        until = unix_timestamp(until_date);
+      };
+
+      let mac = String(dlg.find("INPUT.mac").val()).trim();
+      if(!g_mac_free_reg.test(mac)) {
+        dlg.find("INPUT.mac").animateHighlight("red", 300);
+        return;
+      };
+
+      let descr = String(dlg.find("INPUT.descr").val()).trim();
+      if(descr == "") {
+        dlg.find("INPUT.descr").animateHighlight("red", 300);
+        return;
+      };
+
+      let disabled = (dlg.find("INPUT.disabled").is(":checked"))?1:0;
+
+      let level = dlg.find("SELECT.level").val();
+      let donefunc = dlg.data("donefunc");
+
+      run_query({"action": "add_iot", "descr": descr, "level": level, "prev_mac": prev_row !== undefined ? prev_row["mac"] : "",
+                 "until": until, "mac": mac, "disabled": disabled}, function(res) {
+
+        dlg.dialog( "close" );
+        if(donefunc !== undefined) {
+          donefunc(res);
+        };
+
+      });
+    }
+  });
+
+  buttons.push({
+    'text': 'Отмена',
+    'click': function() {$(this).dialog( "close" );},
+  });
+
+  let dialog_options = {
+    modal:true,
+    maxHeight:1000,
+    maxWidth:1800,
+    minWidth:1200,
+    width: "auto",
+    height: "auto",
+    buttons: buttons,
+    close: function() {
+      $(this).dialog("destroy");
+      $(this).remove();
+    }
+  };
+
+  dialog.appendTo("BODY");
+  dialog.dialog( dialog_options );
+
+  dialog.find("INPUT.until")
+   .datepicker({
+     dateFormat: "dd.mm.yy",
+     firstDay: 1,
+     minDate: new Date()
+   })
+   //.datepicker("setDate", until_date)
+  ;
+
+  if(row_data !== undefined && row_data["until"] !== 0) {
+    dialog.find("INPUT.until")
+     .datepicker("setDate", row_data["until"])
+    ;
+  };
+
+  dialog.find("INPUT.mac").focus();
 };

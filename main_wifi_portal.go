@@ -103,6 +103,10 @@ func init() {
     log.Fatal("No Default_level_dpsk defined")
   }
 
+  if _, ex := config.Levels[config.Default_level_iot]; config.Default_level_iot == "" || !ex {
+    log.Fatal("No Default_level_iot defined")
+  }
+
   if config.Radius_dictionary == "" {
     log.Fatal("No Radius_dictionary defined")
   }
