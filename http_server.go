@@ -20,6 +20,7 @@ import (
   //"reflect"
   "sort"
   "net/http"
+  "net/url"
   "golang.org/x/net/netutil"
   "github.com/fatih/color"
   "github.com/rohanthewiz/element"
@@ -198,7 +199,7 @@ func http_server(stop chan string, wg *sync.WaitGroup) {
   http.HandleFunc("/admin/consts.js", handleConsts)
 
   http.HandleFunc("/pages", handlePages)
-  http.HandleFunc("/static", handleStatic)
+  http.HandleFunc("/static/", handleStatic)
 
   listener, listen_err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", config.Www_port))
   if listen_err != nil {
@@ -2869,11 +2870,35 @@ func handleStatic(w http.ResponseWriter, req *http.Request) {
 
 
   var template = config.Template
+  var referer string
 
-  referer := req.Header["Referer"]
+  if header_values, ex := req.Header["Referer"]; ex && len(header_values) == 1 {
+    referer = req.Header["Referer"][0]
+    ref_url, url_err := url.Parse(referer)
+    if url_err == nil {
+      q := ref_url.Query()
+      if q.Get("template") != "" {
+        template = q.Get("template")
+      }
+    }
+  } else {
+    req_template := req.URL.Query().Get("template")
+    if req_template != "" {
+      template = req_template
+    }
+  }
 
-  fmt.Println("Static handler:")
-  fmt.Println("\ttemplate: ", template)
-  fmt.Println("\tr.URL.Path: ", req.URL.Path)
-  fmt.Println("\tReferer: ", referer)
+  //fmt.Println("Static handler:")
+  //fmt.Println("\ttemplate: ", template)
+  //fmt.Println("\tr.URL.Path: ", req.URL.Path)
+  //fmt.Println("\tReferer: ", referer)
+
+  dir := os.DirFS(config.Templates_dir + "/" + template + "/static")
+
+  req_resourse, _ := strings.CutPrefix(req.URL.Path, "/static")
+
+  //fmt.Println("\tFile: ", req_resourse)
+  //fmt.Println()
+
+  http.ServeFileFS(w, req, dir, req_resourse)
 }
