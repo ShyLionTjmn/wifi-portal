@@ -198,6 +198,7 @@ func http_server(stop chan string, wg *sync.WaitGroup) {
   http.HandleFunc("/admin/consts.js", handleConsts)
 
   http.HandleFunc("/pages", handlePages)
+  http.HandleFunc("/static", handleStatic)
 
   listener, listen_err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", config.Www_port))
   if listen_err != nil {
@@ -2376,13 +2377,13 @@ func handlePages(w http.ResponseWriter, req *http.Request) {
       e("body").R(
         e("ui").R(
           e("li").R(
-            e("a", "href", "?random=0").R(
+            e("a", "href", "?random=0&template=" + template).R(
               t("Factory MAC"),
             ),
           ),
           e("li").R( e("span").R( t(" ") ),),
           e("li").R(
-            e("a", "href", "?random=1").R(
+            e("a", "href", "?random=1&template=" + template).R(
               t("Random MAC"),
             ),
           ),
@@ -2824,4 +2825,55 @@ func RenderPage(page string, C M, template string, sess_info M, messages M, lang
 
   return result_page, nil
 
+}
+
+func handleStatic(w http.ResponseWriter, req *http.Request) {
+  if req.Method == "OPTIONS" {
+    w.Header().Set("Access-Control-Allow-Origin", "*")
+    w.Header().Set("Access-Control-Allow-Methods", "*")
+    w.Header().Set("Access-Control-Allow-Headers", "*")
+    w.WriteHeader(http.StatusOK)
+    return
+  }
+
+  defer func() {
+    handle_error_html(recover(), w, req)
+  } ()
+
+  // find user session
+
+  remote_addr := req.RemoteAddr
+
+  ip_a := remote_addr_reg.FindStringSubmatch(remote_addr)
+  if ip_a == nil {
+    panic("bad remote addr")
+  }
+
+  user_ip := ip_a[1]
+
+  if config.Proxy_host != "" && config.Client_ip_header != "" {
+    if user_ip != config.Proxy_host {
+      panic("access denied for " + user_ip)
+    }
+
+    if header_values, ex := req.Header[config.Client_ip_header]; !ex || len(header_values) == 0 {
+      panic("invalid headers")
+    }
+
+    user_ip = req.Header[config.Client_ip_header][0]
+
+    if !ip_reg.MatchString(user_ip) {
+      panic("bad header value")
+    }
+  }
+
+
+  var template = config.Template
+
+  referer := req.Header["Referer"]
+
+  fmt.Println("Static handler:")
+  fmt.Println("\ttemplate: ", template)
+  fmt.Println("\tr.URL.Path: ", req.URL.Path)
+  fmt.Println("\tReferer: ", referer)
 }
