@@ -173,6 +173,12 @@ func handleAjax(w http.ResponseWriter, req *http.Request) {
         }
       }
 
+      if sessions.Vs(sess_id, "state") == "iot" &&
+        iots.EvM(sta_id) &&
+      true {
+        out_sess["iot"] = iots.VM(sta_id).Copy()
+      }
+
       out_sessions = append(out_sessions, out_sess)
     }
     out["sessions"] = out_sessions

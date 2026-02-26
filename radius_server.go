@@ -361,7 +361,7 @@ func (p radiusService) RadiusHandle(request *radius.Packet) (npac *radius.Packet
           npac.SetAVP( radius.AVP{Type: radius.ReplyMessage, Value: []byte("Access denied: disabled user")} )
 
           return
-        } else if iots.Evi(sta_id, "until") && iots.Vi(sta_id, "until") <= time.Now().Unix() {
+        } else if iots.Evi(sta_id, "until") && iots.Vi(sta_id, "until") <= time.Now().Unix() && iots.Vi(sta_id, "until") > 0 {
           // expired sta_id, reject
           npac.Code = radius.AccessReject
           npac.SetAVP( radius.AVP{Type: radius.ReplyMessage, Value: []byte("Access denied: expired user")} )
@@ -827,7 +827,7 @@ func coa_server(stop chan string, wg *sync.WaitGroup) {
         // iot
         if !iots.EvM(sta_id) ||
            (iots.Evi(sta_id, "disabled") && iots.Vi(sta_id, "disabled") != 0) ||
-           (iots.Evi(sta_id, "until") && iots.Vi(sta_id, "until") <= time.Now().Unix()) ||
+           (iots.Evi(sta_id, "until") && iots.Vi(sta_id, "until") <= time.Now().Unix() && iots.Vi(sta_id, "until") > 0) ||
         false {
           drop = true
         }

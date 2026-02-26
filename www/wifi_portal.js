@@ -390,6 +390,8 @@ function actionSessions() {
           username_text = session["username"];
         } else if(session["auth_cache"] !== undefined && session["auth_cache"]["username"] !== undefined) {
           username_text = session["auth_cache"]["username"];
+        } else if(session["iot"] !== undefined && session["iot"]["descr"] !== undefined) {
+          username_text = session["iot"]["descr"];
         };
 
 
@@ -1922,7 +1924,8 @@ function add_vouchers_dlg(on_done) {
    .datepicker({
      dateFormat: "dd.mm.yy",
      firstDay: 1,
-     minDate: new Date()
+     //minDate: new Date(),
+     __ignore: 1
    })
    .datepicker("setDate", until_date)
   ;
@@ -2740,14 +2743,14 @@ function edit_iot_dlg(row_data, on_done) {
    .datepicker({
      dateFormat: "dd.mm.yy",
      firstDay: 1,
-     minDate: new Date()
+     //minDate: new Date(),
+     __ignore: 1
    })
-   //.datepicker("setDate", until_date)
   ;
 
   if(row_data !== undefined && row_data["until"] !== 0) {
     dialog.find("INPUT.until")
-     .datepicker("setDate", row_data["until"])
+     .datepicker("setDate", new Date(row_data["until"] * 1000) )
     ;
   };
 
