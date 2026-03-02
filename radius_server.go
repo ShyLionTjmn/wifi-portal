@@ -70,11 +70,16 @@ func (p radiusService) RadiusHandle(request *radius.Packet) (npac *radius.Packet
   now_t := time.Now()
   now := now_t.Unix()
 
+  //fmt.Println("Handle enter")
+
   // a pretty print of the request.
-  fmt.Println("Request: ", request)
+//  fmt.Println("Request: ", request)
 
   defer func() {
-    fmt.Println("Answer: ", npac)
+//    fmt.Println("Answer: ", npac)
+//    fmt.Println("Returning")
+//    fmt.Println("")
+//    fmt.Println("Handle leave")
   } ()
 
 	npac = request.Reply()
@@ -846,9 +851,9 @@ func coa_server(stop chan string, wg *sync.WaitGroup) {
           session: sessions.VM(sess_id).Copy(),
           action: sessions.Vs(sess_id, "coa_state"),
         })
-        fmt.Println(now_debug + "CoA sta: " + sta_id + " sess: " + sess_id +
-          " to state: " + sessions.Vs(sess_id, "coa_state"),
-        )
+//        fmt.Println(now_debug + "CoA sta: " + sta_id + " sess: " + sess_id +
+//          " to state: " + sessions.Vs(sess_id, "coa_state"),
+//        )
         //fmt.Println("auth_cache:")
         //fmt.Println(auth_cache.ToJsonStr(true))
       }
@@ -884,7 +889,7 @@ func coa_server(stop chan string, wg *sync.WaitGroup) {
 
 	            uerr := UnifiLogin(unifis[unifi_controller], unifi_controller)
 	            if uerr != nil {
-		            fmt.Println(now_debug + "Error: ", uerr.Error())
+//		            fmt.Println(now_debug + "Error: ", uerr.Error())
 		            unifis[unifi_controller] = nil
 		            continue
 	            }
@@ -961,7 +966,7 @@ func coa_server(stop chan string, wg *sync.WaitGroup) {
           _ = reply
 
           if err != nil {
-              fmt.Println(now_debug + "Error: ", err.Error())
+              fmt.Println(now_debug + "CoA Error: ", err.Error())
           } else {
             globalMutex.Lock()
             if sessions.EvM(coa.sess_id) {
