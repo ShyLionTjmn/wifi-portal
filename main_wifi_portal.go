@@ -156,6 +156,7 @@ func main() {
 
     red_wait_start := time.Now().Unix()
 
+    fmt.Println("Checking for redis")
     red, rerr = RedisCheck(red, "unix", config.Redis_socket, config.Redis_db)
 
     for rerr != nil && strings.Contains(rerr.Error(), "LOADING Redis is loading the dataset in memory") {
@@ -172,6 +173,21 @@ func main() {
     if rerr != nil {
       fmt.Println("Redis problems on startup")
       log.Fatal(rerr.Error())
+    }
+
+    _, rerr = redis.String(red.Do("GET", config.Redis_prefix + "nonexistentkey"))
+
+    for rerr != nil && strings.Contains(rerr.Error(), "LOADING Redis is loading the dataset in memory") {
+      now := time.Now().Unix()
+      if now > (red_wait_start + int64(config.Redis_wait)) {
+        fmt.Println("Tired waiting for redis startup")
+        log.Fatal(rerr.Error())
+        break
+      }
+      fmt.Println("Waiting for redis startup: ", (red_wait_start + int64(config.Redis_wait)) - now, " seconds to fail")
+      time.Sleep(time.Second)
+
+      _, rerr = redis.String(red.Do("GET", config.Redis_prefix + "nonexistentkey"))
     }
 
     var json_str string
