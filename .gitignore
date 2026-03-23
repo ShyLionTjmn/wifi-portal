@@ -1,0 +1,6 @@
+**/.*
+build
+templates/*
+!.gitignore
+!templates/default
+!templates/pretty
